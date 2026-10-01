@@ -23,7 +23,7 @@
     "dotenv": "^17.4.2",
     "kazagumo": "^3.4.3",
     "mongodb": "^7.5.0",
-    "pg": "^8.23.0",
+    "pg": "^8.23.1",
     "shoukaku": "^4.3.0"
   },
   "devDependencies": {

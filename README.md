@@ -130,7 +130,7 @@ Automatic protection against server nukes — no configuration required for base
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/your-username/cassie.git
+git clone https://github.com/ReyanshIsNeverInnocent/cassie.git
 cd cassie
 npm install
 ```

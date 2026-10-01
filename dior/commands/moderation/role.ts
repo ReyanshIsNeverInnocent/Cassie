@@ -82,8 +82,19 @@ function parseToggle(value: string | undefined, current: boolean): boolean | nul
   return null;
 }
 
+function resolveRoleTarget(guild: any, args: string[]): { role: any | null; remainder: string[] } {
+  for (let end = args.length; end >= 1; end--) {
+    const candidate = args.slice(0, end).join(' ');
+    const role = resolveRole(guild, candidate);
+    if (role) return { role, remainder: args.slice(end) };
+  }
+
+  const fallback = resolveRole(guild, args.join(' '));
+  return { role: fallback, remainder: [] };
+}
+
 function roleTarget(guild: any, args: string[], start = 1): any | null {
-  return resolveRole(guild, args.slice(start).join(' '));
+  return resolveRoleTarget(guild, args.slice(start)).role;
 }
 
 async function removeRoleFromEveryone(
@@ -132,7 +143,7 @@ async function handleRoleManagement(message: any, args: string[], guild: any, in
   }
 
   if (action === 'all' && args[1]?.toLowerCase() === 'remove') {
-    const role = resolveRole(guild, args.slice(2).join(' '));
+    const { role } = resolveRoleTarget(guild, args.slice(2));
     const roleErr = validateRole(guild, role, invokerMember);
     if (roleErr) return sendError({ message }, roleErr);
     return removeRoleFromEveryone(message, guild, role);
@@ -142,7 +153,8 @@ async function handleRoleManagement(message: any, args: string[], guild: any, in
     const property = action === 'hoist' ? 'hoist' : 'mentionable';
     const stateArg = args[args.length - 1]?.toLowerCase();
     const hasState = ['on', 'off'].includes(stateArg);
-    const targetRole = resolveRole(guild, (hasState ? args.slice(1, -1) : args.slice(1)).join(' '));
+    const selectorArgs = hasState ? args.slice(1, -1) : args.slice(1);
+    const { role: targetRole } = resolveRoleTarget(guild, selectorArgs);
     const targetRoleErr = validateRole(guild, targetRole, invokerMember);
     if (targetRoleErr) return sendError({ message }, targetRoleErr);
     const value = parseToggle(hasState ? stateArg : undefined, targetRole[property]);
@@ -154,11 +166,11 @@ async function handleRoleManagement(message: any, args: string[], guild: any, in
     return sendSuccess({ message }, `${action === 'hoist' ? 'Hoisting' : 'Mentionability'} for <@&${targetRole.id}> is now **${value ? 'on' : 'off'}**.`);
   }
 
-  const role = roleTarget(guild, args);
+  const { role, remainder } = resolveRoleTarget(guild, args.slice(1));
   const roleErr = validateRole(guild, role, invokerMember);
   if (roleErr) return sendError({ message }, roleErr);
   if (action === 'rename') {
-    const name = args.slice(2).join(' ').trim();
+    const name = remainder.join(' ').trim();
     if (!name) return sendError({ message }, 'Usage: `role rename <role> <name>`');
     if (name.length > 100) return sendError({ message }, 'Role name cannot exceed 100 characters.');
     const oldName = role.name;
@@ -171,7 +183,7 @@ async function handleRoleManagement(message: any, args: string[], guild: any, in
     return sendSuccess({ message }, `Deleted role **${oldName}**.`);
   }
   if (action === 'color') {
-    const color = args[2]?.replace(/^#/, '');
+    const color = remainder.join(' ').replace(/^#/, '').trim();
     if (!color || !/^[0-9a-f]{6}$/i.test(color)) return sendError({ message }, 'Provide a valid 6-digit hex color, such as `#5865F2`.');
     await role.setColor(`#${color}`, `Role color changed by ${message.author.username}`);
     return sendSuccess({ message }, `Set <@&${role.id}> color to **#${color.toUpperCase()}**.`);
