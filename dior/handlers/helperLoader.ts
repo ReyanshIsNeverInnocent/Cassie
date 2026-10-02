@@ -23,12 +23,14 @@ export async function loadHelpers(client: CassieClient): Promise<Record<string, 
   const dir     = join(process.cwd(), 'dist', 'dior', 'helpers');
   const helpers: Record<string, any> = {};
   let loaded = 0;
+  let moduleCount = 0;
 
   try {
     const entries = readdirSync(dir, { withFileTypes: true });
 
     for (const entry of entries) {
       if (!entry.isFile() || !entry.name.endsWith('.js')) continue;
+      moduleCount++;
 
       try {
         const full = join(dir, entry.name);
@@ -50,6 +52,8 @@ export async function loadHelpers(client: CassieClient): Promise<Record<string, 
     }
   }
 
-  console.log(`[HELPERS LOADER] Loaded ${loaded} helper(s)`);
+  console.log(
+    `[HELPERS LOADER] Registered ${loaded} client.helpers factory(ies) from ${moduleCount} helper modules (other modules are imported directly where needed)`,
+  );
   return helpers;
 }

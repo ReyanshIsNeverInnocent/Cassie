@@ -28,7 +28,7 @@ export async function prefixExecute(
   }
 
   const commandList = [...names].sort((a, b) => a.localeCompare(b));
-  const content = `## All Commands\n${commandList.map((name) => `\`${name}\``).join(' · ')}`;
+  const content = `## All Commands\n${commandList.map((name) => `\`${name}\``).join(', ')}`;
   const container = new ContainerBuilder()
     .setAccentColor(parseInt(config.defaultAccentColor.replace('#', ''), 16))
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(content));

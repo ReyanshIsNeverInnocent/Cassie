@@ -342,6 +342,7 @@ export async function execute(message: any, client: CassieClient): Promise<void>
     ? message.content.slice(usedPrefix.length).trim().slice(commandName.length)
     : message.content.trim().slice(commandName.length);
   message.commandRawArgs = prefixAndCmd.trimStart();
+  message.commandName = commandName;
 
   webhookLogger.logCommand(commandName, message.author, message.guild, args, {
     prefix: usedPrefix || '(noprefix)',

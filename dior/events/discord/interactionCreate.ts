@@ -88,6 +88,7 @@ import { buildPlayerStoppedPayload } from '../../components/music/nowPlaying.js'
 import { clearPlayerState, updateNowPlayingMessage } from '../../helpers/nowPlayingManager.js';
 import { handleVoiceMasterInteraction } from '../../components/features/voiceMaster.js';
 import { handleHoneypotInteraction } from '../../components/features/honeypot.js';
+import { handleGiveawayInteraction } from '../../components/features/giveaway.js';
 
 export const name = 'interactionCreate';
 export const once = false;
@@ -105,7 +106,7 @@ const REGISTERED_CUSTOM_ID_PREFIXES = [
   'debug', 'help', 'phhelp', 'viewdata', 'deldata', 'senddata',
   'serverlist', 'rolepick', 'list', 'untimeout', 'unban', 'queue', 'player',
   'customise',
-  'sb', 'rr', 'voicemaster', 'hp',
+  'sb', 'rr', 'voicemaster', 'hp', 'gway',
 ] as const;
 
 (function assertNoCustomIdPrefixCollisions(): void {
@@ -119,6 +120,11 @@ const REGISTERED_CUSTOM_ID_PREFIXES = [
 })();
 
 export async function execute(interaction: any, client: CassieClient): Promise<void> {
+
+  if (typeof interaction.customId === 'string' && interaction.customId.startsWith('gway:')) {
+    await handleGiveawayInteraction(interaction, client);
+    return;
+  }
 
   // ── VoiceMaster panel/buttons/modals ───────────────────────────────────────
   if (typeof interaction.customId === 'string' && interaction.customId.startsWith('voicemaster:')) {
@@ -383,6 +389,10 @@ export async function execute(interaction: any, client: CassieClient): Promise<v
     }
     if (prefix === 'player') {
       await handlePlayerButton(interaction, action, client);
+      return;
+    }
+    if (prefix === 'gway') {
+      await handleGiveawayInteraction(interaction, client);
       return;
     }
     return;

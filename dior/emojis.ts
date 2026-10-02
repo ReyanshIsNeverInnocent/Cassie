@@ -110,6 +110,10 @@ export const emojis = {
   redBulletPoint: '<:redBulletPoint:1544808634855333938>',
   redDrink: '<:redDrink:1544812403177558146>',
   redMinecraftHeart: '<:redMinecraftHeart:1544822859157741670>',
+  redGiftBox: '<a:redGiftbox:1555539711311872022>',
+  redDash: '<:redDash:1555539792656080896>',
+  animatedConfetti: '<a:confetti1:1555550956119261186>',
+  penguinFacepalm: '<:penguinFacepalm:1555551364388491374>',
 
   // Honeypot
   honeypot:       '🍯',

@@ -1,6 +1,7 @@
 // xoxo/database/database.ts
 import { randomBytes } from 'crypto';
 import { PostgresDocumentStore, type PostgresCollection } from './postgresDocumentStore.js';
+import { getRedisCache } from './redisCache.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & Interfaces
@@ -88,6 +89,33 @@ export interface ReminderDoc {
   channel_id: string;
   reason:     string;
   remind_at:  number;
+  created_at: number;
+}
+
+export type GiveawayStatus = 'active' | 'ending' | 'ended';
+
+export interface GiveawayDoc {
+  _id: string;
+  id: string;
+  guild_id: string;
+  channel_id: string;
+  message_id: string;
+  host_id: string;
+  prize: string;
+  winners: number;
+  end_at: number;
+  status: GiveawayStatus;
+  winner_ids: string[];
+  winner_history: string[];
+  created_at: number;
+  ended_at?: number;
+  ending_claimed_at?: number;
+}
+
+export interface GiveawayEntryDoc {
+  _id: string;
+  giveaway_id: string;
+  user_id: string;
   created_at: number;
 }
 
@@ -517,6 +545,7 @@ export interface UserInvokeDoc {
 
 export class Database {
   private client: PostgresDocumentStore;
+  private readonly redisCache = getRedisCache();
   private db: PostgresDocumentStore | null = null;
   private connected = false;
   private readonly botId: string;
@@ -596,13 +625,16 @@ export class Database {
 
     console.log(`[DATABASE] 🪐 Connected to ${this.dbName} for bot: ${buildName}`);
     console.log(`[DATABASE] 🪐 Database connected`);
+    await this.redisCache.connect();
   }
 
   async close(): Promise<void> {
-    if (!this.connected) return;
-    await this.client.close();
-    this.connected = false;
-    console.log('[DATABASE] Connection closed');
+    await this.redisCache.close();
+    if (this.connected) {
+      await this.client.close();
+      this.connected = false;
+      console.log('[DATABASE] Connection closed');
+    }
   }
 
   // ── Ping ──────────────────────────────────────────────────────────────────
@@ -642,11 +674,19 @@ export class Database {
 
   async getGuildPrefix(guildId: string): Promise<string | null> {
     await this.connect();
-    const cached = this.guildPrefixCache.get(guildId);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const local = this.guildPrefixCache.get(guildId);
+    if (local && local.expiresAt > Date.now()) return local.value;
+    const cacheKey = `guild-prefix:${guildId}`;
+    const shared = await this.redisCache.get<string | null>(cacheKey);
+    if (shared.available && shared.hit) {
+      const value = shared.value ?? null;
+      this.guildPrefixCache.set(guildId, { expiresAt: Date.now() + this.messageSettingTtlMs, value });
+      return value;
+    }
     const doc = await this.col<GuildPrefixDoc>('guild_prefixes').findOne({ guild_id: guildId });
     const value = doc?.prefix ?? null;
     this.guildPrefixCache.set(guildId, { expiresAt: Date.now() + this.messageSettingTtlMs, value });
+    await this.redisCache.set(cacheKey, value, this.messageSettingTtlMs / 1000);
     return value;
   }
 
@@ -657,14 +697,16 @@ export class Database {
       { $set: { prefix, updated_at: new Date() } },
       { upsert: true },
     );
-    this.guildPrefixCache.delete(guildId);
+    this.guildPrefixCache.set(guildId, { expiresAt: Date.now() + this.messageSettingTtlMs, value: prefix });
+    await this.redisCache.set(`guild-prefix:${guildId}`, prefix, this.messageSettingTtlMs / 1000);
     return true;
   }
 
   async removeGuildPrefix(guildId: string): Promise<boolean> {
     await this.connect();
     const result = await this.col<GuildPrefixDoc>('guild_prefixes').deleteOne({ guild_id: guildId });
-    this.guildPrefixCache.delete(guildId);
+    this.guildPrefixCache.set(guildId, { expiresAt: Date.now() + this.messageSettingTtlMs, value: null });
+    await this.redisCache.set(`guild-prefix:${guildId}`, null, this.messageSettingTtlMs / 1000);
     return result.deletedCount > 0;
   }
 
@@ -673,10 +715,18 @@ export class Database {
   async getDisabledCommand(command: string): Promise<DisabledCommandDoc | null> {
     await this.connect();
     const key = command.toLowerCase();
-    const cached = this.disabledCommandCache.get(key);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const local = this.disabledCommandCache.get(key);
+    if (local && local.expiresAt > Date.now()) return local.value;
+    const cacheKey = `disabled-command:${key}`;
+    const shared = await this.redisCache.get<DisabledCommandDoc | null>(cacheKey);
+    if (shared.available && shared.hit) {
+      const value = shared.value ?? null;
+      this.disabledCommandCache.set(key, { expiresAt: Date.now() + this.messageSettingTtlMs, value });
+      return value;
+    }
     const value = await this.col<DisabledCommandDoc>('disabled_commands').findOne({ command: key });
     this.disabledCommandCache.set(key, { expiresAt: Date.now() + this.messageSettingTtlMs, value });
+    await this.redisCache.set(cacheKey, value, this.messageSettingTtlMs / 1000);
     return value;
   }
 
@@ -687,13 +737,18 @@ export class Database {
       { $set: { command: command.toLowerCase(), reason, disabled_by: disabledBy, disabled_at: new Date() } },
       { upsert: true },
     );
-    this.disabledCommandCache.delete(command.toLowerCase());
+    const key = command.toLowerCase();
+    const value: DisabledCommandDoc = { command: key, reason, disabled_by: disabledBy, disabled_at: new Date() };
+    this.disabledCommandCache.set(key, { expiresAt: Date.now() + this.messageSettingTtlMs, value });
+    await this.redisCache.set(`disabled-command:${key}`, value, this.messageSettingTtlMs / 1000);
   }
 
   async enableCommand(command: string): Promise<boolean> {
     await this.connect();
-    const result = await this.col<DisabledCommandDoc>('disabled_commands').deleteOne({ command: command.toLowerCase() });
-    this.disabledCommandCache.delete(command.toLowerCase());
+    const key = command.toLowerCase();
+    const result = await this.col<DisabledCommandDoc>('disabled_commands').deleteOne({ command: key });
+    this.disabledCommandCache.set(key, { expiresAt: Date.now() + this.messageSettingTtlMs, value: null });
+    await this.redisCache.set(`disabled-command:${key}`, null, this.messageSettingTtlMs / 1000);
     return result.deletedCount > 0;
   }
 
@@ -1083,9 +1138,16 @@ export class Database {
     if (this.blacklistGlobalCache && this.blacklistGlobalCache.expiresAt > Date.now()) {
       return this.blacklistGlobalCache.value;
     }
+    const shared = await this.redisCache.get<boolean>('blacklist-global-enabled');
+    if (shared.available && shared.hit) {
+      const value = shared.value ?? true;
+      this.blacklistGlobalCache = { expiresAt: Date.now() + this.messageSettingTtlMs, value };
+      return value;
+    }
     const doc = await this.col<{ _id?: string; enabled: boolean }>('settings').findOne({ _id: 'blacklist_global' } as any);
     const value = doc?.enabled ?? true;
     this.blacklistGlobalCache = { expiresAt: Date.now() + this.messageSettingTtlMs, value };
+    await this.redisCache.set('blacklist-global-enabled', value, this.messageSettingTtlMs / 1000);
     return value;
   }
 
@@ -1097,15 +1159,24 @@ export class Database {
       { upsert: true },
     );
     this.blacklistGlobalCache = { expiresAt: Date.now() + this.messageSettingTtlMs, value: enabled };
+    await this.redisCache.set('blacklist-global-enabled', enabled, this.messageSettingTtlMs / 1000);
     return true;
   }
 
   async isUserBlacklisted(userId: string): Promise<boolean> {
     await this.connect();
-    const cached = this.userBlacklistCache.get(userId);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const local = this.userBlacklistCache.get(userId);
+    if (local && local.expiresAt > Date.now()) return local.value;
+    const cacheKey = `blacklisted-user:${userId}`;
+    const shared = await this.redisCache.get<boolean>(cacheKey);
+    if (shared.available && shared.hit) {
+      const value = shared.value ?? false;
+      this.userBlacklistCache.set(userId, { expiresAt: Date.now() + this.messageSettingTtlMs, value });
+      return value;
+    }
     const value = !!(await this.col<BlacklistUserDoc>('blacklist_users').findOne({ user_id: userId }));
     this.userBlacklistCache.set(userId, { expiresAt: Date.now() + this.messageSettingTtlMs, value });
+    await this.redisCache.set(cacheKey, value, this.messageSettingTtlMs / 1000);
     return value;
   }
 
@@ -1117,6 +1188,7 @@ export class Database {
       { upsert: true },
     );
     this.userBlacklistCache.set(userId, { expiresAt: Date.now() + this.messageSettingTtlMs, value: true });
+    await this.redisCache.set(`blacklisted-user:${userId}`, true, this.messageSettingTtlMs / 1000);
     return true;
   }
 
@@ -1124,6 +1196,7 @@ export class Database {
     await this.connect();
     const result = await this.col<BlacklistUserDoc>('blacklist_users').deleteOne({ user_id: userId });
     this.userBlacklistCache.set(userId, { expiresAt: Date.now() + this.messageSettingTtlMs, value: false });
+    await this.redisCache.set(`blacklisted-user:${userId}`, false, this.messageSettingTtlMs / 1000);
     return result.deletedCount > 0;
   }
 
@@ -1139,9 +1212,16 @@ export class Database {
     if (this.blacklistServerGlobalCache && this.blacklistServerGlobalCache.expiresAt > Date.now()) {
       return this.blacklistServerGlobalCache.value;
     }
+    const shared = await this.redisCache.get<boolean>('blacklist-server-global-enabled');
+    if (shared.available && shared.hit) {
+      const value = shared.value ?? true;
+      this.blacklistServerGlobalCache = { expiresAt: Date.now() + this.messageSettingTtlMs, value };
+      return value;
+    }
     const doc = await this.col<{ _id?: string; enabled: boolean }>('settings').findOne({ _id: 'blacklist_server_global' } as any);
     const value = doc?.enabled ?? true;
     this.blacklistServerGlobalCache = { expiresAt: Date.now() + this.messageSettingTtlMs, value };
+    await this.redisCache.set('blacklist-server-global-enabled', value, this.messageSettingTtlMs / 1000);
     return value;
   }
 
@@ -1153,15 +1233,24 @@ export class Database {
       { upsert: true },
     );
     this.blacklistServerGlobalCache = { expiresAt: Date.now() + this.messageSettingTtlMs, value: enabled };
+    await this.redisCache.set('blacklist-server-global-enabled', enabled, this.messageSettingTtlMs / 1000);
     return true;
   }
 
   async isServerBlacklisted(guildId: string): Promise<boolean> {
     await this.connect();
-    const cached = this.serverBlacklistCache.get(guildId);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const local = this.serverBlacklistCache.get(guildId);
+    if (local && local.expiresAt > Date.now()) return local.value;
+    const cacheKey = `blacklisted-server:${guildId}`;
+    const shared = await this.redisCache.get<boolean>(cacheKey);
+    if (shared.available && shared.hit) {
+      const value = shared.value ?? false;
+      this.serverBlacklistCache.set(guildId, { expiresAt: Date.now() + this.messageSettingTtlMs, value });
+      return value;
+    }
     const value = !!(await this.col<BlacklistServerDoc>('blacklist_servers').findOne({ guild_id: guildId }));
     this.serverBlacklistCache.set(guildId, { expiresAt: Date.now() + this.messageSettingTtlMs, value });
+    await this.redisCache.set(cacheKey, value, this.messageSettingTtlMs / 1000);
     return value;
   }
 
@@ -1173,6 +1262,7 @@ export class Database {
       { upsert: true },
     );
     this.serverBlacklistCache.set(guildId, { expiresAt: Date.now() + this.messageSettingTtlMs, value: true });
+    await this.redisCache.set(`blacklisted-server:${guildId}`, true, this.messageSettingTtlMs / 1000);
     return true;
   }
 
@@ -1180,6 +1270,7 @@ export class Database {
     await this.connect();
     const result = await this.col<BlacklistServerDoc>('blacklist_servers').deleteOne({ guild_id: guildId });
     this.serverBlacklistCache.set(guildId, { expiresAt: Date.now() + this.messageSettingTtlMs, value: false });
+    await this.redisCache.set(`blacklisted-server:${guildId}`, false, this.messageSettingTtlMs / 1000);
     return result.deletedCount > 0;
   }
 
@@ -1295,6 +1386,84 @@ export class Database {
   async listActiveReminders(): Promise<ReminderDoc[]> {
     await this.connect();
     return this.col<ReminderDoc>('reminders').find({ remind_at: { $gt: Date.now() } } as any).toArray();
+  }
+
+  // ── Giveaways ─────────────────────────────────────────────────────────────
+
+  async createGiveaway(giveaway: GiveawayDoc): Promise<void> {
+    await this.connect();
+    await this.col<GiveawayDoc>('giveaways').insertOne(giveaway);
+  }
+
+  async getGiveaway(id: string): Promise<GiveawayDoc | null> {
+    await this.connect();
+    return this.col<GiveawayDoc>('giveaways').findOne({ _id: id });
+  }
+
+  async getGiveawayByMessage(messageId: string, guildId?: string): Promise<GiveawayDoc | null> {
+    await this.connect();
+    return this.col<GiveawayDoc>('giveaways').findOne({
+      message_id: messageId,
+      ...(guildId ? { guild_id: guildId } : {}),
+    });
+  }
+
+  async updateGiveaway(id: string, update: Record<string, any>): Promise<void> {
+    await this.connect();
+    await this.col<GiveawayDoc>('giveaways').updateOne({ _id: id }, { $set: update });
+  }
+
+  async listGiveawaysForScheduler(): Promise<GiveawayDoc[]> {
+    await this.connect();
+    return this.col<GiveawayDoc>('giveaways').find({
+      status: { $in: ['active', 'ending'] },
+    }).toArray();
+  }
+
+  async listActiveGiveawaysByGuild(guildId: string, limit = 10): Promise<GiveawayDoc[]> {
+    await this.connect();
+    return this.col<GiveawayDoc>('giveaways')
+      .find({ guild_id: guildId, status: 'active' })
+      .sort({ end_at: 1 })
+      .limit(limit)
+      .toArray();
+  }
+
+  async createGiveawayEntry(entry: GiveawayEntryDoc): Promise<void> {
+    await this.connect();
+    await this.col<GiveawayEntryDoc>('giveaway_entries').insertOne(entry);
+  }
+
+  async listGiveawayEntries(giveawayId: string): Promise<GiveawayEntryDoc[]> {
+    await this.connect();
+    return this.col<GiveawayEntryDoc>('giveaway_entries')
+      .find({ giveaway_id: giveawayId })
+      .sort({ created_at: 1 })
+      .toArray();
+  }
+
+  /** Atomically reserve ending work; stale reservations can be reclaimed after a crash. */
+  async claimGiveawayEnd(id: string, now: number, staleBefore: number): Promise<GiveawayDoc | null> {
+    await this.connect();
+    const result = await this.client.query<any[]>(
+      `UPDATE bot_documents
+       SET data = data || jsonb_build_object('status', 'ending', 'ending_claimed_at', $4::bigint),
+           updated_at = NOW()
+       WHERE bot_id = $1 AND collection_name = 'giveaways' AND document_id = $2
+         AND (data->>'status' = 'active'
+           OR (data->>'status' = 'ending' AND COALESCE((data->>'ending_claimed_at')::bigint, 0) < $3))
+       RETURNING data`,
+      [this.botId, id, staleBefore, now],
+    );
+    return (result.rows[0]?.data as GiveawayDoc | undefined) ?? null;
+  }
+
+  async releaseGiveawayEnd(id: string): Promise<void> {
+    await this.connect();
+    await this.col<GiveawayDoc>('giveaways').updateOne(
+      { _id: id, status: 'ending' },
+      { $set: { status: 'active' }, $unset: { ending_claimed_at: '' } },
+    );
   }
 
   // ── VoiceMaster ────────────────────────────────────────────────────────────

@@ -145,6 +145,7 @@ Copy `.env.example` to `.env` and fill in the values:
 | `DISCORD_CLIENT_ID` | Yes | Your application's client ID |
 | `DATABASE_URL` | Yes | Neon PostgreSQL connection string used by the bot |
 | `DIRECT_DATABASE_URL` | No | Direct Neon connection used by migrations |
+| `REDIS_URL` | No | Redis connection URL (`redis://` or `rediss://`) for the optional shared cache |
 | `BOT_IDENTIFIER` | Yes | Separates documents for each bot instance |
 | `MONGO_URI` | No | Legacy MongoDB source used only by `npm run migrate:postgres` |
 | `READY_LOG_WEBHOOK_URL` | No | Webhook for ready-state logs |
@@ -163,6 +164,14 @@ For development (no rebuild required):
 ```bash
 npm run dev
 ```
+
+### Optional Redis cache
+
+PostgreSQL remains the durable source of truth. When `REDIS_URL` is configured, Cassie uses its 10-second in-process cache first, then Redis on local cache misses to share guild prefixes, disabled commands, and blacklist checks across cluster processes. If Redis is unset or unavailable, the bot falls back to PostgreSQL. Redis is not required to run Cassie.
+
+Use a private Redis instance and keep its URL/password secret. For TLS-enabled hosted Redis, use the `rediss://` URL provided by the host.
+
+The bot's cluster 0 publishes an aggregated website stats snapshot to Cloudflare Workers KV at `cassie:website:stats:v1` every 30 seconds with a 15-minute expiry. Set `CF_ACCOUNT_ID`, `CF_KV_NAMESPACE_ID`, and `CF_KV_WRITE_TOKEN` on the bot host. Website stats use KV; Redis remains for the bot's shared database cache.
 
 ### Required Discord intents & permissions
 

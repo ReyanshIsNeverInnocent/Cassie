@@ -7,7 +7,7 @@
   "scripts": {
     "build": "rimraf dist && tsc && node scripts/copy-dist-assets.mjs",
     "start": "node dist/index.js",
-    "dev": "tsx index.ts",
+    "dev": "npm run build && npm run start",
     "check:command-parity": "node scripts/check-command-parity.mjs",
     "migrate:postgres": "tsx scripts/migrate-mongo-to-postgres.ts"
   },
@@ -24,6 +24,7 @@
     "kazagumo": "^3.4.3",
     "mongodb": "^7.5.0",
     "pg": "^8.23.1",
+    "redis": "^5.12.1",
     "shoukaku": "^4.3.0"
   },
   "devDependencies": {

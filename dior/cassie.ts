@@ -33,6 +33,8 @@ import { StatusManager } from './structures/StatusManager.js';
 import { reapplyAllNameStyles } from './helpers/nameStyle.js';
 import { migrateVoiceMasterSetups } from './helpers/voiceMaster.js';
 import { initializeReminders } from './helpers/reminderStore.js';
+import { initializeGiveawayScheduler } from './helpers/giveawayManager.js';
+import { startWebsiteStatsPublisher } from './helpers/websiteStatsPublisher.js';
 
 // ── Global unhandled-rejection safety net ──────────────────────────────────
 // Certain third-party libraries (Shoukaku/Kazagumo) fire off internal async
@@ -100,6 +102,7 @@ async function bootstrap(): Promise<void> {
 
   // Reminders need the connected database so persisted timers can be restored.
   await initializeReminders(client);
+  await initializeGiveawayScheduler(client);
 
   // ── [DATABASE - LOADING DATA] ────────────────────────────────────────────────
   if (client.db) {
@@ -107,6 +110,9 @@ async function bootstrap(): Promise<void> {
     await migrateVoiceMasterSetups(client);
   }
 
+
+  // Only cluster 0 publishes the aggregated live snapshot for the website.
+  startWebsiteStatsPublisher(client);
   // ── Kazagumo (music) ─────────────────────────────────────────────────────────
   // Must be initialized BEFORE loadAllEvents() so the eventLoader can attach
   // player/node events to client.kazagumo and client.kazagumo.shoukaku.

@@ -183,7 +183,7 @@ export const config: Config = {
   // Shown when hardcodeHostingService is "" and the public IP doesn't match
   // any entry in xoxo/config/hostingServices.ts.
   fallbackHostingService: "Novalunosis-XIV (local)",
-  databaseProvider: "Neon PostgreSQL",
+  databaseProvider: "Supabase Postgres",
 
   // ── 4. Notes channel ───────────────────────────────────────────────────────
   notesChannelId: "1521510471276957837",
