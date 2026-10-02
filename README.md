@@ -1,13 +1,13 @@
 <h1 align="center">Cassie</h1>
 
 <p align="center">
-  <em>A powerful, multi-instance Discord bot built for moderation, antinuke, and utility — with a clean Components V2 interface throughout.</em>
+  <em>A powerful, multi-instance Discord bot built for moderation, antinuke, and utility - with a clean Components V2 interface throughout.</em>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/discord.js-v14-5865F2?style=flat-square&logo=discord&logoColor=white" />
   <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white" />
-  <img src="https://img.shields.io/badge/PostgreSQL-Neon-00E599?style=flat-square&logo=postgresql&logoColor=white" />
+  <img src="https://img.shields.io/badge/PostgreSQL-Supabase-00E599?style=flat-square&logo=postgresql&logoColor=white" />
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" />
 </p>
 
