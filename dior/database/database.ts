@@ -1802,6 +1802,15 @@ export class Database {
     return doc?.commandsExecuted ?? 0;
   }
 
+  async updateWebsiteStatsSnapshot(snapshot: Record<string, unknown>): Promise<void> {
+    await this.connect();
+    await this.col('settings').updateOne(
+      { _id: 'website_stats_snapshot' } as any,
+      { $set: snapshot },
+      { upsert: true },
+    );
+  }
+
   // ── Bot Stats (persisted for the website) ─────────────────────────────────
 
   async updateBotStats(stats: { servers: number; members: number; channels: number }): Promise<void> {

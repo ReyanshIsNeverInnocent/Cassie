@@ -2,8 +2,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildActiveGiveawayPayload,
+  buildEndedGiveawayPayload,
   buildGiveawayListPayload,
   buildGiveawayParticipantsPayload,
+  buildWinnerAnnouncement,
 } from './giveaway.js';
 
 describe('buildActiveGiveawayPayload', () => {
@@ -26,6 +28,40 @@ describe('buildActiveGiveawayPayload', () => {
     const content = JSON.stringify(payload);
     assert.match(content, /Winners: 3/);
     assert.match(content, /Entries: 12/);
+  });
+});
+
+describe('ended giveaway payloads', () => {
+  const giveaway = {
+    id: 'g1',
+    guild_id: 'guild',
+    channel_id: 'channel',
+    message_id: 'message',
+    host_id: 'host',
+    prize: 'Steam gift card',
+    winners: 3,
+    end_at: 1_700_000_000_000,
+    ended_at: 1_700_000_000_000,
+    status: 'ended',
+    winner_ids: [],
+    winner_history: [],
+    created_at: 1_700_000_000_000,
+  } as any;
+
+  it('keeps the entry count visible after a giveaway ends', () => {
+    const payload = buildEndedGiveawayPayload(giveaway, 12);
+
+    assert.match(JSON.stringify(payload), /Entries: 12/);
+  });
+
+  it('shows cancellations as cancelled with no winners declared', () => {
+    const payload = buildEndedGiveawayPayload(giveaway, 12, null, true);
+    const announcement = buildWinnerAnnouncement(giveaway, [], undefined, false, true);
+
+    assert.match(JSON.stringify(payload), /Cancelled: No winners were declared/);
+    assert.match(JSON.stringify(payload), /Giveaway Cancelled/);
+    assert.match(JSON.stringify(announcement), /giveaway was cancelled\. No winners were declared/);
+    assert.doesNotMatch(JSON.stringify(announcement), /no valid entries/i);
   });
 });
 

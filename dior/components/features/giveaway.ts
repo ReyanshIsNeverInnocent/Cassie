@@ -128,15 +128,23 @@ export function buildGiveawayParticipantsPayload(
   };
 }
 
-export function buildEndedGiveawayPayload(giveaway: GiveawayDoc, _entries: number, serverIconUrl?: string | null): any {
+export function buildEndedGiveawayPayload(
+  giveaway: GiveawayDoc,
+  entriesCount: number,
+  serverIconUrl?: string | null,
+  cancelled = false,
+): any {
   const winners = giveaway.winner_ids ?? [];
-  const pickedLine = winners.length
-    ? `Picked: ${winners.slice(0, 3).map((id) => `<@${id}>`).join(' ')}${winners.length > 3 ? ' …' : ''}`
-    : 'Picked: No valid entries';
+  const pickedLine = cancelled
+    ? 'Cancelled: No winners were declared'
+    : winners.length
+      ? `Picked: ${winners.slice(0, 3).map((id) => `<@${id}>`).join(' ')}${winners.length > 3 ? ' …' : ''}`
+      : 'Picked: No valid entries';
   const textDisplay = new TextDisplayBuilder().setContent([
     `## ${emojis.redGiftBox} Prize: ${giveaway.prize}`,
     `${emojis.redDash} ${pickedLine}`,
-    `${emojis.redDash} Ended: <t:${Math.floor((giveaway.ended_at ?? Date.now()) / 1000)}:R>`,
+    `${emojis.redDash} Entries: ${entriesCount}`,
+    `${emojis.redDash} ${cancelled ? 'Cancelled' : 'Ended'}: <t:${Math.floor((giveaway.ended_at ?? Date.now()) / 1000)}:R>`,
     `${emojis.redDash} Hosted by <@${giveaway.host_id}>`,
   ].join('\n'));
   const panel = new ContainerBuilder()
@@ -157,7 +165,7 @@ export function buildEndedGiveawayPayload(giveaway: GiveawayDoc, _entries: numbe
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(`gway:ended:${giveaway.id}`)
-          .setLabel('Giveaway Ended')
+          .setLabel(cancelled ? 'Giveaway Cancelled' : 'Giveaway Ended')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
       ),
@@ -246,9 +254,12 @@ export function buildWinnerAnnouncement(
   winnerIds: string[],
   messageUrl?: string,
   rerolled = false,
+  cancelled = false,
 ): any {
   const announcement = container(
-    winnerIds.length
+    cancelled
+      ? `${emojis.penguinFacepalm} **${giveaway.prize}** giveaway was cancelled. No winners were declared.`
+      : winnerIds.length
       ? `${emojis.animatedConfetti} ${rerolled ? 'Rerolled: ' : ''}Congratulations ${winnerIds.map((id) => `<@${id}>`).join(', ')}! You won **${giveaway.prize}**. Hosted by <@${giveaway.host_id}>.`
       : `${emojis.penguinFacepalm} **${giveaway.prize}** has ended, but there were no valid entries.`,
   );
@@ -387,7 +398,6 @@ export async function handleGiveawayInteraction(interaction: any, client: Cassie
         user_id: interaction.user.id,
         created_at: Date.now(),
       });
-      await interaction.reply({ content: `You entered **${giveaway.prize}**. Good luck!`, flags: MessageFlags.Ephemeral });
     } catch {
       const entries = await client.db.listGiveawayEntries(giveaway.id).catch((): any[] => []);
       const alreadyEntered = entries.some((entry) => entry.user_id === interaction.user.id);
@@ -395,7 +405,36 @@ export async function handleGiveawayInteraction(interaction: any, client: Cassie
         content: alreadyEntered ? 'You have already entered this giveaway.' : 'Could not save your entry. Please try again.',
         flags: MessageFlags.Ephemeral,
       }).catch((): null => null);
+      return;
     }
+
+    let entries: any[];
+    try {
+      entries = await client.db.listGiveawayEntries(giveaway.id);
+    } catch (error) {
+      console.warn(`[GIVEAWAY] Could not refresh entry count for ${giveaway.id}: ${(error as Error).message}`);
+      await interaction.reply({
+        content: `You entered **${giveaway.prize}**, but the displayed entry count could not be refreshed.`,
+        flags: MessageFlags.Ephemeral,
+      }).catch((): null => null);
+      return;
+    }
+
+    try {
+      await interaction.message.edit(buildActiveGiveawayPayload(
+        giveaway,
+        entries.length,
+        interaction.guild?.iconURL({ size: 256, extension: 'png' }) ?? null,
+      ));
+    } catch (error) {
+      console.warn(`[GIVEAWAY] Could not update entry count on message ${giveaway.message_id}: ${(error as Error).message}`);
+      await interaction.reply({
+        content: `You entered **${giveaway.prize}**, but the displayed entry count could not be updated.`,
+        flags: MessageFlags.Ephemeral,
+      }).catch((): null => null);
+      return;
+    }
+    await interaction.reply({ content: `You entered **${giveaway.prize}**. Good luck!`, flags: MessageFlags.Ephemeral });
     return;
   }
 

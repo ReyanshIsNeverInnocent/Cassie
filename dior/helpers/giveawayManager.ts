@@ -117,11 +117,11 @@ export async function endGiveaway(
 
     if (message) {
       const serverIconUrl = await getGiveawayServerIcon(client, giveaway.guild_id);
-      await message.edit(buildEndedGiveawayPayload(giveaway, entries.length, serverIconUrl)).catch((error: unknown) => {
+      await message.edit(buildEndedGiveawayPayload(giveaway, entries.length, serverIconUrl, !!options.cancel)).catch((error: unknown) => {
         console.warn(`[GIVEAWAY] Could not update giveaway message ${giveaway.message_id}: ${(error as Error).message}`);
       });
     }
-    await channel.send(buildWinnerAnnouncement(giveaway, winnerIds, message?.url)).catch((error: unknown) => {
+    await channel.send(buildWinnerAnnouncement(giveaway, winnerIds, message?.url, false, !!options.cancel)).catch((error: unknown) => {
       console.warn(`[GIVEAWAY] Could not announce winners for ${giveaway.id}: ${(error as Error).message}`);
     });
     await client.db.updateGiveaway(giveaway.id, {

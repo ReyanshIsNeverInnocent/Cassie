@@ -2,11 +2,8 @@ import type { CassieClient } from '../structures/CassieClient.js';
 import { resolveWsPing } from '../utils/wsPing.js';
 
 const PUBLISH_INTERVAL_MS = 30_000;
-const SNAPSHOT_TTL_SECONDS = 15 * 60;
 const COMMANDS_REFRESH_MS = 30_000;
 const AGGREGATION_TIMEOUT_MS = 20_000;
-
-const SNAPSHOT_KEY = 'cassie:website:stats:v1';
 
 interface ClusterTotals {
   servers: number;
@@ -26,15 +23,8 @@ function readLocalTotals(client: CassieClient): ClusterTotals {
 export function startWebsiteStatsPublisher(client: CassieClient): void {
   const clusterId = Number((client.cluster as any)?.id ?? 0);
   if (clusterId !== 0) return;
-  const accountId = process.env['CF_ACCOUNT_ID'];
-  const namespaceId = process.env['CF_KV_NAMESPACE_ID'];
-  const writeToken = process.env['CF_KV_WRITE_TOKEN'];
-  if (!accountId || !namespaceId || !writeToken) {
-    console.warn(`[WEB STATS] Publisher disabled: missing ${[
-      !accountId && 'CF_ACCOUNT_ID',
-      !namespaceId && 'CF_KV_NAMESPACE_ID',
-      !writeToken && 'CF_KV_WRITE_TOKEN',
-    ].filter(Boolean).join(', ')}.`);
+  if (!client.db) {
+    console.warn('[WEB STATS] Publisher disabled: database is unavailable.');
     return;
   }
 
@@ -43,7 +33,7 @@ export function startWebsiteStatsPublisher(client: CassieClient): void {
   let publishing = false;
   let lastErrorAt = 0;
   let hasPublished = false;
-  console.log(`[WEB STATS] Publishing key ${SNAPSHOT_KEY} to Cloudflare KV namespace ${namespaceId}.`);
+  console.log('[WEB STATS] Publishing website stats to Supabase Postgres.');
 
   const publish = async (): Promise<void> => {
     if (publishing) return;
@@ -111,27 +101,11 @@ export function startWebsiteStatsPublisher(client: CassieClient): void {
         timestamp: now,
       };
 
-      const keyPath = encodeURIComponent(SNAPSHOT_KEY);
-      const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/storage/kv/namespaces/${encodeURIComponent(namespaceId)}/values/${keyPath}?expiration_ttl=${SNAPSHOT_TTL_SECONDS}`;
-      const response = await fetch(endpoint, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${writeToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(snapshot),
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (response.ok) {
-        lastErrorAt = 0;
-        if (!hasPublished) {
-          hasPublished = true;
-          console.log('[WEB STATS] Initial Cloudflare KV snapshot published successfully.');
-        }
-      } else if (Date.now() - lastErrorAt > 60_000) {
-        lastErrorAt = Date.now();
-        const detail = await response.text().catch(() => '');
-        console.warn(`[WEB STATS] Cloudflare KV snapshot write failed (${response.status}); website stats will expire until publishing resumes. ${detail.slice(0, 300)}`);
+      await client.db.updateWebsiteStatsSnapshot(snapshot);
+      lastErrorAt = 0;
+      if (!hasPublished) {
+        hasPublished = true;
+        console.log('[WEB STATS] Initial Supabase stats snapshot published successfully.');
       }
     } catch (error) {
       if (Date.now() - lastErrorAt > 60_000) {
@@ -147,5 +121,5 @@ export function startWebsiteStatsPublisher(client: CassieClient): void {
   void publish();
   const timer = setInterval(() => void publish(), PUBLISH_INTERVAL_MS);
   timer.unref?.();
-  console.log(`[WEB STATS] Cloudflare KV publisher started on cluster ${clusterId} (30 sec interval).`);
+  console.log(`[WEB STATS] Supabase publisher started on cluster ${clusterId} (30 sec interval).`);
 }

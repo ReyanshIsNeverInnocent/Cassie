@@ -171,7 +171,7 @@ PostgreSQL remains the durable source of truth. When `REDIS_URL` is configured, 
 
 Use a private Redis instance and keep its URL/password secret. For TLS-enabled hosted Redis, use the `rediss://` URL provided by the host.
 
-The bot's cluster 0 publishes an aggregated website stats snapshot to Cloudflare Workers KV at `cassie:website:stats:v1` every 30 seconds with a 15-minute expiry. Set `CF_ACCOUNT_ID`, `CF_KV_NAMESPACE_ID`, and `CF_KV_WRITE_TOKEN` on the bot host. Website stats use KV; Redis remains for the bot's shared database cache.
+The bot's cluster 0 publishes an aggregated website stats snapshot to the Supabase Postgres `bot_documents` store every 30 seconds. The website API reads that same snapshot using `DATABASE_URL` and `BOT_IDENTIFIER`; configure both variables on the Vercel project with the same values used by the bot. Website stats do not use Cloudflare KV.
 
 ### Required Discord intents & permissions
 

@@ -199,18 +199,21 @@ async function chooseMode(message: any, sources: StealSource[], client: CassieCl
     .catch((): null => null);
   if (!prompt) return null;
 
+  let interaction: any;
   try {
-    const interaction = await prompt.awaitMessageComponent({
+    interaction = await prompt.awaitMessageComponent({
       filter: (candidate: any) => candidate.user?.id === message.author.id,
       time: 30_000,
     });
-    const mode: StealMode = interaction.customId.includes(':sticker:') ? 'sticker' : 'emoji';
-    await interaction.update(modePromptPayload(message.id, previewUrls, `Stealing as **${mode}**...`, false));
-    return mode;
   } catch {
     await prompt.edit(modePromptPayload(message.id, previewUrls, 'Steal cancelled: no choice was made in time.', false)).catch(() => {});
     return null;
   }
+
+  const mode: StealMode = interaction.customId.includes(':sticker:') ? 'sticker' : 'emoji';
+  await interaction.deferUpdate();
+  await prompt.delete();
+  return mode;
 }
 
 export async function prefixExecute(message: any, args: string[], client: CassieClient) {
