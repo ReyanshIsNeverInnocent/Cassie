@@ -39,7 +39,7 @@ export async function buildRizzPayload(opts: {
   const container = new ContainerBuilder().setAccentColor(parseInt(config.defaultAccentColor.replace('#', ''), 16))
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `${emojis.butterflyPink ?? '✨'} **How much rizz does <@${user.id}> have?**`,
+        `${emojis.furryRizz ?? '✨'} **How much rizz does <@${user.id}> have?**`,
       ),
     )
     .addMediaGalleryComponents(gallery)
