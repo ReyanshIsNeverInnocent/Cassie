@@ -281,8 +281,9 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
         failed.push(identifier);
         continue;
       }
-      name = resolvedEmoji && EMOJI_NAME_PATTERN.test(resolvedEmoji.name ?? '')
-        ? resolvedEmoji.name
+      const sourceName = markdownMatch?.[2] ?? resolvedEmoji?.name;
+      name = sourceName && EMOJI_NAME_PATTERN.test(sourceName)
+        ? sourceName
         : randomFallbackName(usedNames);
       label = identifier;
     }
