@@ -26,6 +26,7 @@ import { enforceHoneypot } from '../../helpers/honeypot.js';
 import { emojiUploadSessions } from '../../commands/developer/emoji-upload.js';
 import { AmbiguousUserError } from '../../helpers/userResolver.js';
 import { consumeCommandCooldown, getCommandCooldown, getPrefixSubcommand } from '../../helpers/commandCooldown.js';
+import { getDisabledCommandStatus } from '../../helpers/disabledCommand.js';
 
 export const name = 'messageCreate';
 export const once = false;
@@ -210,10 +211,18 @@ export async function execute(message: any, client: CassieClient): Promise<void>
         }
         if (mentionUserAlias && !(await enforceUserAliasPermissions(message, mentionCmd))) return;
 
-        if (client.db && !['disable-command', 'enable-command'].includes(mentionCmd.options?.name?.toLowerCase())) {
-          const disabled = await client.db.getDisabledCommand(mentionCmd.options?.name ?? mentionCmdName).catch((): null => null);
+        if (client.db) {
+          const disabled = await getDisabledCommandStatus(
+            client.db,
+            mentionCmd.options?.name ?? mentionCmdName,
+            mentionCmd.options?.category,
+            mentionCmd.options?.aliases,
+          ).catch((): null => null);
           if (disabled) {
-            await sendWarning({ message }, `${mentionCmd.options?.name ?? mentionCmdName} has been disabled by the developer. Reason: ${disabled.reason}`).catch((): null => null);
+            const text = disabled.scope === 'category'
+              ? `The **${disabled.category}** category has been disabled by the developer. Reason: ${disabled.reason}`
+              : `${mentionCmd.options?.name ?? mentionCmdName} has been disabled by the developer. Reason: ${disabled.reason}`;
+            await sendWarning({ message }, text).catch((): null => null);
             return;
           }
         }
@@ -316,10 +325,18 @@ export async function execute(message: any, client: CassieClient): Promise<void>
     await reservedForDeveloper({ message }).catch((): null => null);
     return;
   }
-  if (client.db && !['disable-command', 'enable-command'].includes(command.options?.name?.toLowerCase())) {
-    const disabled = await client.db.getDisabledCommand(command.options?.name ?? commandName).catch((): null => null);
+  if (client.db) {
+    const disabled = await getDisabledCommandStatus(
+      client.db,
+      command.options?.name ?? commandName,
+      command.options?.category,
+      command.options?.aliases,
+    ).catch((): null => null);
     if (disabled) {
-      await sendWarning({ message }, `${command.options?.name ?? commandName} has been disabled by the developer. Reason: ${disabled.reason}`).catch((): null => null);
+      const text = disabled.scope === 'category'
+        ? `The **${disabled.category}** category has been disabled by the developer. Reason: ${disabled.reason}`
+        : `${command.options?.name ?? commandName} has been disabled by the developer. Reason: ${disabled.reason}`;
+      await sendWarning({ message }, text).catch((): null => null);
       return;
     }
   }

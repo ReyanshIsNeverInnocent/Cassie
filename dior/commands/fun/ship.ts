@@ -34,7 +34,7 @@ export const options = {
                'ship <@user1|ID|username> <@user2|ID|username>',
   category:    'fun',
   owner:       false,
-  cooldown:    5,
+  cooldown:    3,
 };
 
 // ── Love percentage ───────────────────────────────────────────────────────────

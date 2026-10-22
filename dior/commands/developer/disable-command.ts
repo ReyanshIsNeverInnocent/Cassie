@@ -12,7 +12,7 @@ export const options = {
   cooldown: 0,
 };
 
-const MANAGEMENT_COMMANDS = new Set(['disable-command', 'enable-command']);
+const MANAGEMENT_COMMANDS = new Set(['disable-command', 'disable-category', 'enable-command']);
 
 function resolveCommand(client: CassieClient, input: string): { name: string; command: any } | null {
   const name = input.toLowerCase();
@@ -29,7 +29,11 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
     const disabled = await client.db.getDisabledCommands();
     if (!disabled.length) return sendInfo({ message }, 'No commands are disabled.');
     return message.channel.send(
-      `**Disabled commands**\n${disabled.map((entry) => `• \`${entry.command}\` — ${entry.reason}`).join('\n')}`,
+      `**Disabled commands and categories**\n${disabled.map((entry) => {
+        const categoryEntry = entry.command.startsWith('category:');
+        const name = categoryEntry ? `category: ${entry.command.slice('category:'.length)}` : entry.command;
+        return `• \`${name}\` — ${entry.reason}`;
+      }).join('\n')}`,
     );
   }
 

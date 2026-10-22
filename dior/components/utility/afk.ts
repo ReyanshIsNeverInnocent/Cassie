@@ -87,7 +87,7 @@ export function buildAfkNoticePayload(options: AfkNoticeOptions): any {
   const untilLine = options.tillAt ? `\nTill: ${toRelativeTimestamp(options.tillAt)}` : '';
   const container = new ContainerBuilder()
     .setAccentColor(parseInt(config.defaultAccentColor.replace('#', ''), 16))
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${emojis.whiteGhost} ${options.displayName} is Away from Keyboard!`))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`### ${emojis.whiteGhost} ${options.displayName} is Away from Keyboard!`))
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(`Since: ${since}${untilLine}\nReason: ${options.reason}`),

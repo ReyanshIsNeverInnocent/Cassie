@@ -18,6 +18,7 @@ import { AmbiguousUserError } from '../../helpers/userResolver.js';
 import webhookLogger from '../../utils/webhookLogger.js';
 import { sendError, sendWarning, reservedForDeveloper } from '../../components/statusMessages.js';
 import { consumeCommandCooldown, getCommandCooldown } from '../../helpers/commandCooldown.js';
+import { getDisabledCommandStatus } from '../../helpers/disabledCommand.js';
 import {
   debugSessions,
   resetDebugTimeout,
@@ -240,9 +241,17 @@ export async function execute(interaction: any, client: CassieClient): Promise<v
     }
 
     if (client.db) {
-      const disabled = await client.db.getDisabledCommand(interaction.commandName).catch((): null => null);
+      const disabled = await getDisabledCommandStatus(
+        client.db,
+        interaction.commandName,
+        command.options?.category,
+        command.options?.aliases,
+      ).catch((): null => null);
       if (disabled) {
-        await sendWarning({ interaction }, `${interaction.commandName} has been disabled by the developer. Reason: ${disabled.reason}`).catch((): null => null);
+        const text = disabled.scope === 'category'
+          ? `The **${disabled.category}** category has been disabled by the developer. Reason: ${disabled.reason}`
+          : `${interaction.commandName} has been disabled by the developer. Reason: ${disabled.reason}`;
+        await sendWarning({ interaction }, text).catch((): null => null);
         return;
       }
     }

@@ -9,7 +9,7 @@ import { unifiedSearch } from '../../helpers/sourceSearch.js';
 
 export const options = {
   name: 'nowplaying',
-  aliases: ['np', 'song', 'current'] as string[],
+  aliases: ['np'] as string[],
   description: 'Show the currently playing track.',
   usage: 'nowplaying [sample|test]',
   category: 'music',

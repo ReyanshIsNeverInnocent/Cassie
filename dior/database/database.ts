@@ -35,6 +35,7 @@ export interface DisabledCommandDoc {
   reason: string;
   disabled_by: string;
   disabled_at: Date;
+  exceptions?: string[];
 }
 
 export interface NoPrefixUserDoc {
@@ -739,6 +740,34 @@ export class Database {
     );
     const key = command.toLowerCase();
     const value: DisabledCommandDoc = { command: key, reason, disabled_by: disabledBy, disabled_at: new Date() };
+    this.disabledCommandCache.set(key, { expiresAt: Date.now() + this.messageSettingTtlMs, value });
+    await this.redisCache.set(`disabled-command:${key}`, value, this.messageSettingTtlMs / 1000);
+  }
+
+  async getDisabledCategory(category: string): Promise<DisabledCommandDoc | null> {
+    return this.getDisabledCommand(`category:${category}`);
+  }
+
+  async disableCategory(
+    category: string,
+    reason: string,
+    disabledBy: string,
+    exceptions: string[],
+  ): Promise<void> {
+    await this.connect();
+    const key = `category:${category.toLowerCase()}`;
+    const value: DisabledCommandDoc = {
+      command: key,
+      reason,
+      disabled_by: disabledBy,
+      disabled_at: new Date(),
+      exceptions,
+    };
+    await this.col<DisabledCommandDoc>('disabled_commands').updateOne(
+      { command: key },
+      { $set: value },
+      { upsert: true },
+    );
     this.disabledCommandCache.set(key, { expiresAt: Date.now() + this.messageSettingTtlMs, value });
     await this.redisCache.set(`disabled-command:${key}`, value, this.messageSettingTtlMs / 1000);
   }
