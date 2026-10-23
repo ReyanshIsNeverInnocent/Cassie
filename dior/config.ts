@@ -88,6 +88,10 @@ export interface Config {
   // 6. Links
   /** Public support server invite URL. */
   supportServer: string;
+  /** Public commands documentation page URL. */
+  commandsPageUrl: string;
+  /** Header image URL used by the help panel. */
+  helpPanelImageUrl: string;
   /** Support server guild ID — its saved name style is used as the default for all other guilds. */
   supportServerId: string;
 
@@ -210,6 +214,9 @@ export const config: Config = {
 
   // ── 6. Links ───────────────────────────────────────────────────────────────
   supportServer: "https://discord.gg/YpCfcCTXdv",
+  commandsPageUrl: "https://cassiewho.vercel.app/commands",
+  helpPanelImageUrl:
+    "https://i.ibb.co/hJKnyW7M/help-image-3.png",
   supportServerId: "1493286181885050961",
 
   // ── 7. Webhooks (from .env) ────────────────────────────────────────────────

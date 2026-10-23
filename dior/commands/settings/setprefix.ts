@@ -1,11 +1,10 @@
 import { config } from '../../config.js';
 // xoxo/commands/settings/setprefix.ts
 //
-// Sets or resets this server's custom command prefix.
+// Sets this server's custom command prefix.
 // Requires Manage Guild permission. Persisted to MongoDB.
 //
 // Prefix execute:  $setprefix <new_prefix>
-//                  $setprefix reset
 // Slash execute:   /setprefix new_prefix:<prefix>
 //                  /resetprefix
 
@@ -21,8 +20,8 @@ import { buildPrefixInfoPayload } from '../../components/settings/prefixInfo.js'
 export const options = {
   name: 'setprefix',
   aliases: ['prefix', 'changeprefix'],
-  description: "Set or reset this server's custom command prefix.",
-  usage: 'setprefix <new prefix | reset>',
+  description: "Set this server's custom command prefix.",
+  usage: 'setprefix <new prefix>',
   category: 'settings',
   owner: false,
   cooldown: 5,
@@ -70,21 +69,15 @@ export async function prefixExecute(
     return;
   }
 
-  if (input === 'reset') {
-    await client.db.removeGuildPrefix(message.guild.id);
-    await message.reply(reply(
-      `${emojis.greentick} Prefix reset to the default: \`${client.config.prefix}\``,
-    ));
-    return;
-  }
-
   if (input.length > MAX_LEN) {
     await message.reply(reply(`${emojis.redcross} Prefix is too long — maximum is **${MAX_LEN}** characters.`));
     return;
   }
 
   await client.db.setGuildPrefix(message.guild.id, input);
-  await message.reply(reply(`${emojis.greentick} Server prefix updated to: \`${input}\``));
+  await message.reply(reply(
+    `${emojis.greentick} Server prefix updated to: '${input}'. Use '${client.config.prefix}resetprefix' to restore the default prefix.`,
+  ));
 }
 
 // ── Slash execute (/setprefix) ────────────────────────────────────────────────
@@ -111,5 +104,7 @@ export async function slashExecute(
   }
 
   await client.db.setGuildPrefix(interaction.guild.id, input);
-  await interaction.reply(reply(`${emojis.greentick} Server prefix updated to: \`${input}\``));
+  await interaction.reply(reply(
+    `${emojis.greentick} Server prefix updated to: '${input}'. Use '${client.config.prefix}resetprefix' to restore the default prefix.`,
+  ));
 }

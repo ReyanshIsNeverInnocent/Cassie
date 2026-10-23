@@ -31,7 +31,6 @@ import {
   helpSessions,
   resetHelpTimeout,
   buildHelpMenuPayload,
-  buildAllCommandsPayload,
   buildCategoryPayload,
   buildDisabledHelpPayload,
 } from '../../components/info/helpMenu.js';
@@ -752,12 +751,9 @@ async function handleHelpNav(interaction: any, action: string, client: CassieCli
   }
 
   let payload: any;
-  if (action === 'home') {
+  if (action === 'home' || action === 'allcommands') {
     payload = await buildHelpMenuPayload(client, session.userId, session.guildId, false);
     session.page = 'home';
-  } else if (action === 'allcommands') {
-    payload = await buildAllCommandsPayload(client, session.userId, session.guildId, false);
-    session.page = 'allcommands';
   } else {
     payload = await buildCategoryPayload(client, session.userId, action, session.guildId, false);
     session.page = action;

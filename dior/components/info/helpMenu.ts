@@ -4,9 +4,12 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
   MessageFlags,
   SectionBuilder,
   SeparatorBuilder,
+  SeparatorSpacingSize,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
   TextDisplayBuilder,
@@ -16,7 +19,7 @@ import type { CassieClient } from '../../structures/CassieClient.js';
 import { emojis } from '../../emojis.js';
 import { categories, excludedCategories } from '../../config/categories.js';
 import { descriptions } from '../../config/descriptions.js';
-import { config, getInviteUrl } from '../../config.js';
+import { config } from '../../config.js';
 
 const NO_USER_PING = { parse: [] as any[] };
 
@@ -25,7 +28,7 @@ const INACTIVITY_MS = 3 * 60 * 1000;
 // ─────────────────────────── Session tracking ───────────────────────────
 
 export interface HelpSession {
-  page: string; // 'home' | 'allcommands' | <categoryName>
+  page: string; // 'home' | <categoryName>
   userId: string;
   guildId: string | null;
   channelId: string;
@@ -94,8 +97,6 @@ export function resetHelpTimeout(messageId: string): void {
       let payload: any;
       if (session.page === 'home') {
         payload = await buildHelpMenuPayload(session.client, session.userId, session.guildId, true);
-      } else if (session.page === 'allcommands') {
-        payload = await buildAllCommandsPayload(session.client, session.userId, session.guildId, true);
       } else {
         payload = await buildCategoryPayload(session.client, session.userId, session.page, session.guildId, true);
       }
@@ -193,35 +194,31 @@ function buildHeaderSection(client: CassieClient, compact = false, guildId?: str
   return section;
 }
 
-function buildFooterLinks(client: CassieClient): string | null {
-  const clientId = client.config?.clientId ?? '';
-  const supportServer: string = (client.config as any).supportServer ?? '';
-  const inviteUrl = getInviteUrl(clientId);
-  const parts: string[] = [];
-  if (supportServer) parts.push(`[Support Server](${supportServer})`);
-  if (inviteUrl) parts.push(`[Invite Me](${inviteUrl})`);
-  return parts.length ? parts.join(' • ') : null;
+function buildHelpBanner(container: ContainerBuilder): ContainerBuilder {
+  return container.addMediaGalleryComponents(
+    new MediaGalleryBuilder().addItems(
+      new MediaGalleryItemBuilder().setURL(config.helpPanelImageUrl),
+    ),
+  );
+}
+
+function buildLinkRow(): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setStyle(ButtonStyle.Link)
+      .setLabel('Commands Page on Web')
+      .setEmoji({ id: '1494789744717074543', name: 'ChemtrailsGrey_VINYL', animated: true })
+      .setURL(config.commandsPageUrl),
+    new ButtonBuilder()
+      .setStyle(ButtonStyle.Link)
+      .setLabel('Support')
+      .setEmoji({ id: '1494789896567525416', name: 'LustForLife_VINYL', animated: true })
+      .setURL(config.supportServer),
+  );
 }
 
 function getDefaultAccentColor(): number {
   return parseInt(config.defaultAccentColor.replace('#', ''), 16);
-}
-
-function buildNavRow(page: string, disabled = false): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setLabel('Home')
-      .setStyle(ButtonStyle.Secondary)
-      .setCustomId('help:home')
-      .setEmoji({ id: '1494789744717074543', name: 'ChemtrailsGrey_VINYL', animated: true })
-      .setDisabled(disabled || page === 'home'),
-    new ButtonBuilder()
-      .setLabel('All commands')
-      .setStyle(ButtonStyle.Secondary)
-      .setCustomId('help:allcommands')
-      .setEmoji({ id: '1494789896567525416', name: 'LustForLife_VINYL', animated: true })
-      .setDisabled(disabled || page === 'allcommands'),
-  );
 }
 
 function buildNavDropdown(
@@ -250,36 +247,6 @@ function buildNavDropdown(
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
 }
 
-const ALL_COMMANDS_TEXT_LIMIT = 3900;
-
-function buildAllCommandsTextBlocks(
-  sortedEntries: Array<[string, string[]]>,
-): string[] {
-  const blocks: string[] = [];
-  let current = '';
-
-  for (const [cat, cmds] of sortedEntries) {
-    const info = categories.find((c) => c.name.toLowerCase() === cat);
-    const displayName = info?.displayName ?? (cat.charAt(0).toUpperCase() + cat.slice(1));
-    const cmdList = cmds.map((c) => `\`${c}\``).join(', ');
-    // Keep the category divider visible without adding one component per
-    // category (Discord caps the entire message at 40 components).
-    const categoryBlock =
-      `${emojis.blackButterfly} **${displayName}**\n` +
-      `- ${cmdList}\n` +
-      `-# ───────────────────────────────────────\n\n`;
-
-    if (current && current.length + categoryBlock.length > ALL_COMMANDS_TEXT_LIMIT) {
-      blocks.push(current.trimEnd());
-      current = '';
-    }
-    current += categoryBlock;
-  }
-
-  if (current) blocks.push(current.trimEnd());
-  return blocks;
-}
-
 async function resolvePrefix(
   client: CassieClient,
   guildId?: string | null,
@@ -303,94 +270,42 @@ export async function buildHelpMenuPayload(
   const { prefix, isCustom } = await resolvePrefix(client, guildId);
   const categoryMap = getCategoryMap(client);
   const totalCommands = [...categoryMap.values()].reduce((sum, cmds) => sum + cmds.length, 0);
+  const guild = guildId ? client.guilds.cache.get(guildId) : null;
+  const avatarUrl =
+    guild?.members?.me?.displayAvatarURL({ forceStatic: false }) ??
+    client.user?.displayAvatarURL({ forceStatic: false });
 
-  const categoryLines = [...categoryMap.entries()]
-    .sort(([a], [b]) => {
-      const ai = categories.find((c) => c.name.toLowerCase() === a)?.index ?? 99;
-      const bi = categories.find((c) => c.name.toLowerCase() === b)?.index ?? 99;
-      return ai - bi;
-    })
-    .map(([cat]) => {
-      const info = categories.find((c) => c.name.toLowerCase() === cat);
-      const display = info?.displayName ?? (cat.charAt(0).toUpperCase() + cat.slice(1));
-      return `${emojis.whiteCards} | **${display}**`;
-    })
-    .join('\n');
+  const introSection = new SectionBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`${emojis.brownishSparkles} **${descriptions.help.default}**`),
+    new TextDisplayBuilder().setContent(
+      `**Hey** <@${userId}>**!** ${emojis.pinkHeartsWithSparkles}\n` +
+        `${isCustom ? '**Native prefix:**' : '**Prefix:**'} \`${prefix}\`\n` +
+        `**Total commands:** ${totalCommands}`,
+    ),
+  );
+  if (avatarUrl) {
+    introSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(avatarUrl));
+  }
 
-  const linksText = buildFooterLinks(client);
-
-  const container = new ContainerBuilder()
-    .setAccentColor(getDefaultAccentColor())
-    .addSectionComponents(buildHeaderSection(client, false, guildId))
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        `**Hey** <@${userId}> ${emojis.gothicHeart}\n` +
-          `${isCustom ? '**Native prefix:**' : '**Prefix:**'} \`${prefix}\`\n` +
-          `**Total commands:** ${totalCommands}`,
-      ),
+  const container = buildHelpBanner(new ContainerBuilder().setAccentColor(getDefaultAccentColor()))
+    .addSeparatorComponents(
+      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
     )
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true));
-
-  if (categoryLines) {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(categoryLines));
-  }
-
-  container
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
-    .addActionRowComponents(buildNavRow('home', disabled))
+    .addSectionComponents(introSection)
+    .addSeparatorComponents(
+      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
+    )
+    .addActionRowComponents(buildLinkRow())
     .addActionRowComponents(buildNavDropdown(client, disabled) as any)
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true));
-
-  if (linksText) {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`-# ${linksText}`));
-  }
+    .addSeparatorComponents(
+      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
+    )
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Thank you for your support.'));
 
   return {
     components: [container],
     flags: MessageFlags.IsComponentsV2 | MessageFlags.SuppressNotifications,
     allowedMentions: NO_USER_PING,
-  };
-}
-
-export async function buildAllCommandsPayload(
-  client: CassieClient,
-  _userId: string,
-  _guildId?: string | null,
-  disabled = false,
-) {
-  const categoryMap = getCategoryMap(client);
-  const linksText = buildFooterLinks(client);
-
-  const sortedEntries = [...categoryMap.entries()].sort(([a], [b]) => {
-    const ai = categories.find((c) => c.name.toLowerCase() === a)?.index ?? 99;
-    const bi = categories.find((c) => c.name.toLowerCase() === b)?.index ?? 99;
-    return ai - bi;
-  });
-
-  const commandBlocks = buildAllCommandsTextBlocks(sortedEntries);
-  const container = new ContainerBuilder()
-    .setAccentColor(getDefaultAccentColor())
-    .addSectionComponents(buildHeaderSection(client, false, _guildId))
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true));
-
-  for (const block of commandBlocks) {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(block));
-  }
-
-  container
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
-    .addActionRowComponents(buildNavRow('allcommands', disabled))
-    .addActionRowComponents(buildNavDropdown(client, disabled) as any)
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true));
-
-  if (linksText) {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`-# ${linksText}`));
-  }
-
-  return {
-    components: [container],
-    flags: MessageFlags.IsComponentsV2 | MessageFlags.SuppressNotifications,
   };
 }
 
@@ -407,10 +322,11 @@ export async function buildCategoryPayload(
   const displayName =
     catInfo?.displayName ?? (categoryName.charAt(0).toUpperCase() + categoryName.slice(1));
   const cmdList = cmds.map((c) => `\`${c}\``).join(', ');
-  const linksText = buildFooterLinks(client);
 
-  const container = new ContainerBuilder()
-    .setAccentColor(getDefaultAccentColor())
+  const container = buildHelpBanner(new ContainerBuilder().setAccentColor(getDefaultAccentColor()))
+    .addSeparatorComponents(
+      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
+    )
     .addSectionComponents(buildHeaderSection(client, true, _guildId))
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
     .addTextDisplayComponents(
@@ -418,14 +334,15 @@ export async function buildCategoryPayload(
         `## ${emojis.blackCross} ${displayName}\n${cmdList || '*No commands available.*'}`,
       ),
     )
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
-    .addActionRowComponents(buildNavRow(categoryName.toLowerCase(), disabled))
+    .addSeparatorComponents(
+      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
+    )
+    .addActionRowComponents(buildLinkRow())
     .addActionRowComponents(buildNavDropdown(client, disabled) as any)
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true));
-
-  if (linksText) {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`-# ${linksText}`));
-  }
+    .addSeparatorComponents(
+      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
+    )
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Thank you for your support.'));
 
   return {
     components: [container],

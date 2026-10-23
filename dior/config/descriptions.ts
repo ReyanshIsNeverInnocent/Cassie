@@ -2,7 +2,7 @@ export const descriptions = {
   help: {
     compact: '**Built for your server.**',
     default:
-      'Ascend above the noise. A quiet vanguard of precision and grace—shaping an effortless, elevated sanctuary for your community.',
+      'Ascend above the noise. A quiet vanguard of precision and grace, shaping an effortless, elevated sanctuary for your community.',
   },
   voicemaster: {
     description:
