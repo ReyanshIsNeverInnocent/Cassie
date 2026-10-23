@@ -2,7 +2,7 @@
 //
 // Change or reset a member's server nickname.
 //
-// Prefix:  $nick <@user|ID|username> <new nickname>       — both required
+// Prefix:  $nick <@user|ID|username> [new nickname]      — omit nickname to reset
 //          $nick reset <user1> [user2] ... [user10]       — reset up to 10 at once
 // Slash:   /nick set user:[user] nickname:[text]
 //          /nick reset user:[user]
@@ -23,7 +23,7 @@ export const options = {
   name:        'nick',
   aliases:     ['nickname'] as string[],
   description: "Change or reset a member's server nickname.",
-  usage: `nick <@user|ID|username> <new nickname>
+  usage: `nick <@user|ID|username> [new nickname]
 nick reset <user1> [user2] ... [user10]`,
   category: 'moderation',
   owner:    false,
@@ -60,9 +60,11 @@ export async function prefixExecute(
     return sendError(ctx, `Usage:\n\`\`\`\n${options.usage}\n\`\`\``);
   }
 
-  // ── Reset mode: nick reset <user1> [user2] ... [user10] ─────────────────
-  if (args[0]?.toLowerCase() === 'reset') {
-    const rawTargets = args.slice(1, 11); // cap at 10
+  // ── Reset mode: nick <user> or nick reset <user1> ... ───────────────────
+  if (args[0]?.toLowerCase() === 'reset' || args.length === 1) {
+    const rawTargets = args[0]?.toLowerCase() === 'reset'
+      ? args.slice(1, 11) // cap at 10
+      : args.slice(0, 1);
     if (!rawTargets.length) {
       return sendError(ctx, `Provide at least one user to reset.\nUsage: \`nick reset <user1> [user2] ... [user10]\``);
     }
@@ -128,10 +130,6 @@ export async function prefixExecute(
   }
 
   // ── Set mode: nick <user> <new nickname> ────────────────────────────────
-  if (args.length < 2) {
-    return sendError(ctx, `Both user and nickname are required.\nUsage: \`nick <@user|ID|username> <new nickname>\``);
-  }
-
   const targetUser = await resolveUser(client, guild, args[0]);
   if (!targetUser) return sendError(ctx, 'User not found. Try a mention, user ID, or username.');
 
