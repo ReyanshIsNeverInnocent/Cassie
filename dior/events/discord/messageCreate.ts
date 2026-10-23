@@ -333,6 +333,8 @@ export async function execute(message: any, client: CassieClient): Promise<void>
       command.options?.aliases,
     ).catch((): null => null);
     if (disabled) {
+      if (usedPrefix === '' && disabled.scope === 'category') return;
+
       const text = disabled.scope === 'category'
         ? `The **${disabled.category}** category has been disabled by the developer. Reason: ${disabled.reason}`
         : `${command.options?.name ?? commandName} has been disabled by the developer. Reason: ${disabled.reason}`;

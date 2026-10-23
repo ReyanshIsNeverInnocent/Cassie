@@ -10,7 +10,7 @@ import { extractThumbnail, formatDuration } from '../../utils/formatting.js';
 
 export const options = {
   name: 'grab',
-  aliases: ['save'] as string[],
+  aliases: [] as string[],
   description: 'DM yourself the details of the currently playing track.',
   usage: 'grab',
   category: 'music',
