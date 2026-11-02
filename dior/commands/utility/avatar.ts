@@ -137,22 +137,7 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
 
   if (!guild) return sendError({ message }, 'This command can only be used in a server.');
 
-  if (!args.length) {
-    const user = await client.users.fetch(message.author.id, { force: true });
-    const member = await guild.members.fetch({ user: user.id, force: true }).catch((): null => null);
-    const hasServerAvatar = !!(member?.avatar);
-    const globalUrl: string = user.displayAvatarURL({ size: 4096 });
-    const serverUrl: string | null = member ? member.displayAvatarURL({ size: 4096 }) : null;
-
-    if (hasServerAvatar && serverUrl) {
-      return sendWithChoice(channel, null, user.username, requesterId, (t) =>
-        t === 'server' ? serverUrl : globalUrl,
-      );
-    }
-    return sendImagePanel({ channel, sendAsReply: null, title: avatarTitle(user.username, 'global'), imageUrl: globalUrl, requesterId, idPrefix: 'av' });
-  }
-
-  const firstArg = args[0].toLowerCase();
+  const firstArg = args[0]?.toLowerCase();
 
   if (firstArg === 'server' || firstArg === 'srv') {
     const iconUrl = guild.iconURL({ size: 4096 });
@@ -175,11 +160,25 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
     return sendImagePanel({ channel, sendAsReply: null, title: avatarTitle('Bot', 'global'), imageUrl: globalUrl, requesterId, idPrefix: 'av' });
   }
 
-  const targetUser = await resolveUser(client, guild, args[0]);
+  let targetUser: any;
+  if (!args.length && message.reference?.messageId) {
+    const repliedMessage = await message.channel.messages
+      .fetch(message.reference.messageId)
+      .catch((): null => null);
+    if (!repliedMessage?.author) return sendError({ message }, 'Could not fetch the replied message.');
+    targetUser = repliedMessage.author;
+  } else if (!args.length) {
+    targetUser = message.author;
+  } else {
+    targetUser = await resolveUser(client, guild, args[0]);
+  }
   if (!targetUser) return sendError({ message }, 'User not found. Try: mention, user ID, or username.');
 
+  const member = await guild.members.fetch({ user: targetUser.id, force: true }).catch((): null => null);
+  const isDeveloper = client.config.developers.some(([, id]) => id === requesterId);
+  if (!member && !isDeveloper) return sendError({ message }, 'user not in the server');
+
   const fullUser = await client.users.fetch(targetUser.id, { force: true });
-  const member = await guild.members.fetch({ user: fullUser.id, force: true }).catch((): null => null);
   const hasServerAvatar = !!(member?.avatar);
   const globalUrl: string = fullUser.displayAvatarURL({ size: 4096 });
   const serverUrl: string | null = member ? member.displayAvatarURL({ size: 4096 }) : null;
@@ -231,10 +230,15 @@ export async function slashExecute(interaction: any, client: CassieClient): Prom
   // ── /avatar user [user] ─────────────────────────────────────────────────────
   const targetOption: any = interaction.options.getUser('user') ?? null;
   const rawUser = targetOption ?? interaction.user;
-  const fullUser = await client.users.fetch(rawUser.id, { force: true });
   const member = guild
-    ? await guild.members.fetch({ user: fullUser.id, force: true }).catch((): null => null)
+    ? await guild.members.fetch({ user: rawUser.id, force: true }).catch((): null => null)
     : null;
+  const isDeveloper = client.config.developers.some(([, id]) => id === requesterId);
+  if (!isDeveloper && (guild ? !member : rawUser.id !== requesterId)) {
+    return sendError({ interaction }, 'user not in the server');
+  }
+
+  const fullUser = await client.users.fetch(rawUser.id, { force: true });
   const hasServerAvatar = !!(member?.avatar);
   const globalUrl: string = fullUser.displayAvatarURL({ size: 4096 });
   const serverUrl: string | null = member ? member.displayAvatarURL({ size: 4096 }) : null;

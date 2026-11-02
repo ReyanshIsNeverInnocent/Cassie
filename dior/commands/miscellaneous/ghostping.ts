@@ -3,8 +3,8 @@
 // Ghost-ping one or more users — sends a message that pings them, then
 // immediately deletes it so the notification appears but the message is gone.
 //
-// Prefix:  $ghostping <@user1> [@user2] … or a role
-// Slash:   /ghostping user1:<user> [user2-user10] or role:<role>
+// Prefix:  $ghostping <@user1> [@user2] … (up to 5 users) or a role
+// Slash:   /ghostping user1:<user> [user2-user5] or role:<role>
 //
 // Checks:
 //   • Invoker has Administrator
@@ -23,13 +23,13 @@ export const options = {
   name:        'ghostping',
   aliases:     ['gp', 'ghostpng'] as string[],
   description: 'Ghost-ping users or a role (pings and immediately deletes the message).',
-  usage:       'ghostping <@user1> [@user2] … | <role>',
+  usage:       'ghostping <@user1> [@user2] [@user3] [@user4] [@user5] | <role>',
   category:    'miscellaneous',
   owner:       false,
   cooldown:    30,
 };
 
-const MAX_USERS = 10;
+const MAX_USERS = 5;
 type GhostPingTarget =
   | { kind: 'users'; ids: string[] }
   | { kind: 'role'; id: string; mention: string };

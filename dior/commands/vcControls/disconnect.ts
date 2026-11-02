@@ -1,9 +1,9 @@
 // xoxo/commands/vcControls/disconnect.ts
 //
-// Disconnect a member from their voice channel. Defaults to the invoker.
+// Disconnect one or more members from their voice channel. Defaults to the invoker.
 //
-// Prefix:  $disconnect [user]
-// Slash:   /disconnect [user]
+// Prefix:  $disconnect [user ...]
+// Slash:   /disconnect [user] [additional_users]
 
 import { PermissionFlagsBits } from 'discord.js';
 import type { CassieClient } from '../../structures/CassieClient.js';
@@ -13,8 +13,8 @@ import { resolveUser } from '../../helpers/userResolver.js';
 export const options = {
   name:        'disconnect',
   aliases:     ['dsc', 'devoice'] as string[],
-  description: 'Disconnect a member from their voice channel. Defaults to yourself.',
-  usage:       'disconnect [user]',
+  description: 'Disconnect one or more members from their voice channels. Defaults to yourself.',
+  usage:       'disconnect [user ...]',
   category:    'vcControls',
   owner:       false,
   cooldown:    3,
@@ -23,33 +23,50 @@ export const options = {
 async function handle(
   ctx:           { message?: any; interaction?: any },
   guild:         any,
-  targetUser:    any,
+  targetUsers:   any[],
   commandUserId: string,
+  invalidUsers:  string[] = [],
 ): Promise<any> {
-  const targetMember = await guild.members.fetch(targetUser.id).catch((): null => null);
-  if (!targetMember) return sendError(ctx, 'Could not find that user in this server.');
+  const results = invalidUsers.map((user) => `User not found: \`${user}\`.`);
+  let failed = invalidUsers.length > 0;
 
-  // Use voiceStates cache directly — member.voice?.channel can read stale data
-  // when the member object was freshly fetched from the REST API.
-  const voiceState = guild.voiceStates.cache.get(targetUser.id);
-  if (!voiceState?.channelId) {
-    return sendError(
-      ctx,
+  for (const targetUser of targetUsers) {
+    const targetMember = await guild.members.fetch(targetUser.id).catch((): null => null);
+    if (!targetMember) {
+      results.push(`<@${targetUser.id}> could not be found in this server.`);
+      failed = true;
+      continue;
+    }
+
+    // Use voiceStates cache directly — member.voice?.channel can read stale data
+    // when the member object was freshly fetched from the REST API.
+    const voiceState = guild.voiceStates.cache.get(targetUser.id);
+    if (!voiceState?.channelId) {
+      results.push(
+        targetUser.id === commandUserId
+          ? 'You are not in any voice channel.'
+          : `<@${targetUser.id}> is not in any voice channel.`,
+      );
+      failed = true;
+      continue;
+    }
+
+    const disconnected = await targetMember.voice.disconnect().catch((): null => null);
+    if (!disconnected) {
+      results.push(`Failed to disconnect <@${targetUser.id}>.`);
+      failed = true;
+      continue;
+    }
+
+    results.push(
       targetUser.id === commandUserId
-        ? 'You are not in any voice channel.'
-        : `<@${targetUser.id}> is not in any voice channel.`,
+        ? `Disconnected you from <#${voiceState.channelId}>.`
+        : `Disconnected <@${targetUser.id}> from <#${voiceState.channelId}>.`,
     );
   }
 
-  const sourceChannel = voiceState.channel ?? guild.channels.cache.get(voiceState.channelId);
-  const disconnected = await targetMember.voice.disconnect().catch((): null => null);
-  if (!disconnected) return sendError(ctx, 'Failed to disconnect that member.');
-
-  const text =
-    targetUser.id === commandUserId
-      ? `Disconnected you from <#${sourceChannel.id}>.`
-      : `Disconnected <@${targetUser.id}> from <#${sourceChannel.id}>.`;
-  return sendSuccess(ctx, text);
+  const result = results.join('\n');
+  return failed ? sendError(ctx, result) : sendSuccess(ctx, result);
 }
 
 export async function prefixExecute(
@@ -68,14 +85,16 @@ export async function prefixExecute(
   if (!botMember?.permissions?.has?.(PermissionFlagsBits.MoveMembers))
     return sendError(ctx, 'I need the **Move Members** permission to disconnect members.');
 
-  let targetUser = message.author;
-  if (args[0]) {
-    const resolved = await resolveUser(client, message.guild, args[0]);
-    if (!resolved) return sendError(ctx, 'User not found. Try a mention, user ID, or username.');
-    targetUser = resolved;
+  const targets = new Map<string, any>();
+  const invalidUsers: string[] = [];
+  for (const arg of args) {
+    const resolved = await resolveUser(client, message.guild, arg);
+    if (resolved) targets.set(resolved.id, resolved);
+    else invalidUsers.push(arg);
   }
 
-  return handle(ctx, message.guild, targetUser, message.author.id);
+  if (!args.length) targets.set(message.author.id, message.author);
+  return handle(ctx, message.guild, [...targets.values()], message.author.id, invalidUsers);
 }
 
 export async function slashExecute(
@@ -94,6 +113,18 @@ export async function slashExecute(
   if (!botMember?.permissions?.has?.(PermissionFlagsBits.MoveMembers))
     return sendError(ctx, 'I need the **Move Members** permission to disconnect members.');
 
-  const targetUser = interaction.options.getUser('user') ?? interaction.user;
-  return handle(ctx, interaction.guild, targetUser, interaction.user.id);
+  const targets = new Map<string, any>();
+  const selectedUser = interaction.options.getUser('user');
+  if (selectedUser) targets.set(selectedUser.id, selectedUser);
+
+  const invalidUsers: string[] = [];
+  const additionalUsers: string = interaction.options.getString('additional_users') ?? '';
+  for (const arg of additionalUsers.trim().split(/\s+/).filter(Boolean)) {
+    const resolved = await resolveUser(client, interaction.guild, arg);
+    if (resolved) targets.set(resolved.id, resolved);
+    else invalidUsers.push(arg);
+  }
+
+  if (!targets.size && !invalidUsers.length) targets.set(interaction.user.id, interaction.user);
+  return handle(ctx, interaction.guild, [...targets.values()], interaction.user.id, invalidUsers);
 }

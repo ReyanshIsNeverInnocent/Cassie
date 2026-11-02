@@ -13,9 +13,9 @@ import { resolveEmoji } from '../../helpers/emojiResolver.js';
 export const options = {
   name: 'react',
   aliases: ['re'] as string[],
-  description: 'React to a message with an emoji.',
-  usage: `react <Unicode emoji, custom emoji name, or ID>     (reply to the target message)
-  react <Unicode emoji, custom emoji name, or ID>     (uses the previous message if no reply)`,
+  description: 'React to a message with one or more emojis.',
+  usage: `react <emoji> [emoji ...]     (reply to the target message)
+  react <emoji> [emoji ...]     (uses the previous message if no reply)`,
   category: 'utility',
   owner: false,
   cooldown: 2,
@@ -25,7 +25,7 @@ export async function slashExecute(interaction: any, client: CassieClient): Prom
   await interaction.deferReply();
 
   const messageId: string = interaction.options.getString('message_id', true).trim();
-  const emojiIdent: string = interaction.options.getString('emoji', true).trim();
+  const emojiIdents: string[] = interaction.options.getString('emoji', true).trim().split(/\s+/);
 
   let targetMessage: any;
   try {
@@ -34,20 +34,22 @@ export async function slashExecute(interaction: any, client: CassieClient): Prom
     return sendError({ interaction }, 'Could not fetch that message. Make sure the ID is correct.');
   }
 
-  const emoji = await resolveEmoji(client, emojiIdent, interaction.guild);
-  if (!emoji) {
-    return sendError({ interaction }, 'Emoji not found! Make sure the bot is in a server that has that emoji.');
-  }
+  for (const identifier of emojiIdents) {
+    const emoji = await resolveEmoji(client, identifier, interaction.guild);
+    if (!emoji) {
+      return sendError({ interaction }, `Emoji \`${identifier}\` not found! Make sure the bot is in a server that has that emoji.`);
+    }
 
-  try {
-    await targetMessage.react(emoji);
-    return sendSuccess({ interaction }, 'Reacted to the message.');
-  } catch (err: any) {
-    console.error('[REACT]', err.message);
-    if (err.code === 10014) return sendError({ interaction }, 'Emoji not found! The bot may not have access to this emoji.');
-    if (err.code === 50001 || err.code === 50013) return sendError({ interaction }, 'I do not have permission to add reactions in this channel.');
-    return sendError({ interaction }, `Failed to react: ${err.message}`);
+    try {
+      await targetMessage.react(emoji);
+    } catch (err: any) {
+      console.error('[REACT]', err.message);
+      if (err.code === 10014) return sendError({ interaction }, 'Emoji not found! The bot may not have access to this emoji.');
+      if (err.code === 50001 || err.code === 50013) return sendError({ interaction }, 'I do not have permission to add reactions in this channel.');
+      return sendError({ interaction }, `Failed to react: ${err.message}`);
+    }
   }
+  return sendSuccess({ interaction }, 'Reacted to the message.');
 }
 
 export async function prefixExecute(message: any, args: string[], client: CassieClient): Promise<any> {
@@ -55,11 +57,7 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
     return sendError({ message }, 'Please provide a Unicode emoji, custom emoji name, or emoji ID to react with.');
   }
 
-  const identifier = args.join(' ').trim();
-  const emoji = await resolveEmoji(client, identifier, message.guild);
-  if (!emoji) {
-    return sendError({ message }, 'Emoji not found! Make sure the bot is in a server that has that emoji.');
-  }
+  const identifiers = args.join(' ').trim().split(/\s+/);
 
   // Determine target message
   let targetMessage: any;
@@ -79,19 +77,27 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
     if (!targetMessage) return sendError({ message }, 'No message found to react to!');
   }
 
-  try {
-    await targetMessage.react(emoji);
-    setTimeout(() => message.delete().catch(() => {}), 1000);
-    const successMsg = await sendSuccess({ channel: message.channel }, 'Reacted!');
-    if (successMsg) setTimeout(() => (successMsg as any).delete().catch(() => {}), 5000);
-  } catch (err: any) {
-    console.error('[REACT]', err.message);
-    if (err.code === 10014) {
-      return sendError({ message }, 'Emoji not found! The bot may not have access to this emoji.');
+  for (const identifier of identifiers) {
+    const emoji = await resolveEmoji(client, identifier, message.guild);
+    if (!emoji) {
+      return sendError({ message }, `Emoji \`${identifier}\` not found! Make sure the bot is in a server that has that emoji.`);
     }
-    if (err.code === 50001 || err.code === 50013) {
-      return sendError({ message }, 'I do not have permission to add reactions in this channel.');
+
+    try {
+      await targetMessage.react(emoji);
+    } catch (err: any) {
+      console.error('[REACT]', err.message);
+      if (err.code === 10014) {
+        return sendError({ message }, 'Emoji not found! The bot may not have access to this emoji.');
+      }
+      if (err.code === 50001 || err.code === 50013) {
+        return sendError({ message }, 'I do not have permission to add reactions in this channel.');
+      }
+      return sendError({ message }, `Failed to react: ${err.message}`);
     }
-    return sendError({ message }, `Failed to react: ${err.message}`);
   }
+
+  setTimeout(() => message.delete().catch(() => {}), 1000);
+  const successMsg = await sendSuccess({ channel: message.channel }, 'Reacted!');
+  if (successMsg) setTimeout(() => (successMsg as any).delete().catch(() => {}), 5000);
 }

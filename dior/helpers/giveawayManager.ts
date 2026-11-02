@@ -18,6 +18,29 @@ async function getGiveawayServerIcon(client: CassieClient, guildId: string): Pro
   return guild?.iconURL({ size: 256, extension: 'png' }) ?? null;
 }
 
+async function getDepartedWinnerIds(client: CassieClient, guildId: string, winnerIds: string[]): Promise<string[]> {
+  if (!winnerIds.length) return [];
+
+  const guild = client.guilds.cache.get(guildId)
+    ?? await client.guilds.fetch(guildId).catch((error: unknown): null => {
+      console.warn(`[GIVEAWAY] Could not fetch server ${guildId} to verify winners: ${(error as Error).message}`);
+      return null;
+    });
+  if (!guild) return [];
+
+  const results = await Promise.all(winnerIds.map(async (userId) => {
+    try {
+      await guild.members.fetch({ user: userId, force: true });
+      return null;
+    } catch (error: any) {
+      if (error?.code === 10007) return userId;
+      console.warn(`[GIVEAWAY] Could not verify winner ${userId} in server ${guildId}: ${error?.message ?? error}`);
+      return null;
+    }
+  }));
+  return results.filter((userId): userId is string => userId !== null);
+}
+
 export function parseGiveawayDuration(raw: string | undefined): number | null {
   const match = raw?.trim().match(/^(\d+)(s|m|h|d)$/i);
   if (!match) return null;
@@ -114,14 +137,15 @@ export async function endGiveaway(
 
     giveaway.status = 'ended';
     giveaway.ended_at = now;
+    const departedWinnerIds = await getDepartedWinnerIds(client, giveaway.guild_id, winnerIds);
 
     if (message) {
       const serverIconUrl = await getGiveawayServerIcon(client, giveaway.guild_id);
-      await message.edit(buildEndedGiveawayPayload(giveaway, entries.length, serverIconUrl, !!options.cancel)).catch((error: unknown) => {
+      await message.edit(buildEndedGiveawayPayload(giveaway, entries.length, serverIconUrl, !!options.cancel, departedWinnerIds)).catch((error: unknown) => {
         console.warn(`[GIVEAWAY] Could not update giveaway message ${giveaway.message_id}: ${(error as Error).message}`);
       });
     }
-    await channel.send(buildWinnerAnnouncement(giveaway, winnerIds, message?.url, false, !!options.cancel)).catch((error: unknown) => {
+    await channel.send(buildWinnerAnnouncement(giveaway, winnerIds, message?.url, false, !!options.cancel, departedWinnerIds)).catch((error: unknown) => {
       console.warn(`[GIVEAWAY] Could not announce winners for ${giveaway.id}: ${(error as Error).message}`);
     });
     await client.db.updateGiveaway(giveaway.id, {
@@ -162,15 +186,16 @@ export async function rerollGiveaway(client: CassieClient, giveaway: GiveawayDoc
   giveaway.winner_ids = winnerIds;
   giveaway.winner_history = winnerHistory;
 
+  const departedWinnerIds = await getDepartedWinnerIds(client, giveaway.guild_id, winnerIds);
   const channel: any = client.channels.cache.get(giveaway.channel_id)
     ?? await client.channels.fetch(giveaway.channel_id).catch((): null => null);
   const message = await channel?.messages?.fetch(giveaway.message_id).catch((): null => null);
   if (!channel?.send) throw new Error('The giveaway channel is unavailable.');
   const serverIconUrl = await getGiveawayServerIcon(client, giveaway.guild_id);
   if (message) {
-    await message.edit(buildEndedGiveawayPayload(giveaway, entries.length, serverIconUrl));
+    await message.edit(buildEndedGiveawayPayload(giveaway, entries.length, serverIconUrl, false, departedWinnerIds));
   }
-  await channel.send(buildWinnerAnnouncement(giveaway, winnerIds, message?.url, true));
+  await channel.send(buildWinnerAnnouncement(giveaway, winnerIds, message?.url, true, false, departedWinnerIds));
   return winnerIds;
 }
 

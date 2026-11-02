@@ -148,26 +148,7 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
 
   if (!guild) return sendError({ message }, 'This command can only be used in a server.');
 
-  if (!args.length) {
-    const user = await client.users.fetch(message.author.id, { force: true });
-    const member = await guild.members.fetch({ user: user.id, force: true }).catch((): null => null);
-    const globalBannerUrl: string | null = user.banner ? user.bannerURL({ size: 4096 }) : null;
-    const serverBannerUrl: string | null = member?.banner ? member.bannerURL({ size: 4096 }) : null;
-
-    if (!globalBannerUrl && !serverBannerUrl) {
-      return sendError({ message }, 'You do not have any banner.');
-    }
-    if (globalBannerUrl && serverBannerUrl) {
-      return sendWithChoice(channel, null, user.username, requesterId, (t) =>
-        t === 'server' ? serverBannerUrl : globalBannerUrl,
-      );
-    }
-    const url = serverBannerUrl ?? globalBannerUrl!;
-    const title = serverBannerUrl ? bannerTitle(user.username, 'server') : bannerTitle(user.username, 'global');
-    return sendImagePanel({ channel, sendAsReply: null, title, imageUrl: url, requesterId, idPrefix: 'bn' });
-  }
-
-  const firstArg = args[0].toLowerCase();
+  const firstArg = args[0]?.toLowerCase();
 
   if (firstArg === 'server' || firstArg === 'srv') {
     const bannerUrl = guild.bannerURL({ size: 4096 });
@@ -194,7 +175,18 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
     return sendImagePanel({ channel, sendAsReply: null, title, imageUrl: url, requesterId, idPrefix: 'bn' });
   }
 
-  const targetUser = await resolveUser(client, guild, args[0]);
+  let targetUser: any;
+  if (!args.length && message.reference?.messageId) {
+    const repliedMessage = await message.channel.messages
+      .fetch(message.reference.messageId)
+      .catch((): null => null);
+    if (!repliedMessage?.author) return sendError({ message }, 'Could not fetch the replied message.');
+    targetUser = repliedMessage.author;
+  } else if (!args.length) {
+    targetUser = message.author;
+  } else {
+    targetUser = await resolveUser(client, guild, args[0]);
+  }
   if (!targetUser) return sendError({ message }, 'User not found. Try: mention, user ID, or username.');
 
   const fullUser = await client.users.fetch(targetUser.id, { force: true });

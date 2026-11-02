@@ -20,21 +20,6 @@ export const data = new SlashCommandBuilder()
   .addUserOption((o) =>
     o.setName('user5').setDescription('Fifth user to ghost-ping.').setRequired(false),
   )
-  .addUserOption((o) =>
-    o.setName('user6').setDescription('Sixth user to ghost-ping.').setRequired(false),
-  )
-  .addUserOption((o) =>
-    o.setName('user7').setDescription('Seventh user to ghost-ping.').setRequired(false),
-  )
-  .addUserOption((o) =>
-    o.setName('user8').setDescription('Eighth user to ghost-ping.').setRequired(false),
-  )
-  .addUserOption((o) =>
-    o.setName('user9').setDescription('Ninth user to ghost-ping.').setRequired(false),
-  )
-  .addUserOption((o) =>
-    o.setName('user10').setDescription('Tenth user to ghost-ping.').setRequired(false),
-  )
   .addStringOption((o) =>
     o.setName('role').setDescription('Role mention, ID, or name to ghost-ping.').setRequired(false),
   );

@@ -15,9 +15,8 @@
 // indices are coherent. (Switching mode at runtime isn't currently exposed
 // but the design accommodates it.)
 //
-// The "mobile" device hint is NOT applied here — see CassieClient: the
-// IDENTIFY payload's browser/os/device must be set BEFORE the gateway
-// handshake, which is the only point at which the icon can be installed.
+// Device hints are NOT applied here — see CassieClient: the IDENTIFY payload's
+// browser/os/device must be set BEFORE the gateway handshake.
 
 import { ActivityType, GatewayOpcodes, type Client } from 'discord.js';
 import {
@@ -38,9 +37,9 @@ const ACTIVITY_TYPE_MAP: Record<string, ActivityType> = {
   Custom:     ActivityType.Custom,
 };
 
-/** "mobile"/"web" are device hints — the gateway status itself must be online/idle/dnd/invisible. */
+/** Device hints are not gateway statuses; they map to online presence. */
 function toGatewayStatus(s: DisplayStatus): 'online' | 'idle' | 'dnd' | 'invisible' {
-  return (s === 'mobile' || s === 'web') ? 'online' : s;
+  return (s === 'mobile' || s === 'web' || s === 'vr') ? 'online' : s;
 }
 
 function interpolate(client: Client, text: string): string {

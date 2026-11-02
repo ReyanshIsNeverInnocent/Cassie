@@ -133,12 +133,14 @@ export function buildEndedGiveawayPayload(
   entriesCount: number,
   serverIconUrl?: string | null,
   cancelled = false,
+  departedWinnerIds: string[] = [],
 ): any {
   const winners = giveaway.winner_ids ?? [];
+  const departedWinners = new Set(departedWinnerIds);
   const pickedLine = cancelled
     ? 'Cancelled: No winners were declared'
     : winners.length
-      ? `Picked: ${winners.slice(0, 3).map((id) => `<@${id}>`).join(' ')}${winners.length > 3 ? ' …' : ''}`
+      ? `Picked: ${winners.slice(0, 3).map((id) => `<@${id}>${departedWinners.has(id) ? ' (left the server)' : ''}`).join(' ')}${winners.length > 3 ? ' …' : ''}`
       : 'Picked: No valid entries';
   const textDisplay = new TextDisplayBuilder().setContent([
     `## ${emojis.redGiftBox} Prize: ${giveaway.prize}`,
@@ -255,12 +257,14 @@ export function buildWinnerAnnouncement(
   messageUrl?: string,
   rerolled = false,
   cancelled = false,
+  departedWinnerIds: string[] = [],
 ): any {
+  const departedWinners = new Set(departedWinnerIds);
   const announcement = container(
     cancelled
       ? `${emojis.penguinFacepalm} **${giveaway.prize}** giveaway was cancelled. No winners were declared.`
       : winnerIds.length
-      ? `${emojis.animatedConfetti} ${rerolled ? 'Rerolled: ' : ''}Congratulations ${winnerIds.map((id) => `<@${id}>`).join(', ')}! You won **${giveaway.prize}**. Hosted by <@${giveaway.host_id}>.`
+      ? `${emojis.animatedConfetti} ${rerolled ? 'Rerolled: ' : ''}Congratulations ${winnerIds.map((id) => `<@${id}>${departedWinners.has(id) ? ' (has left this server)' : ''}`).join(', ')}! You won **${giveaway.prize}**. Hosted by <@${giveaway.host_id}>.`
       : `${emojis.penguinFacepalm} **${giveaway.prize}** has ended, but there were no valid entries.`,
   );
 

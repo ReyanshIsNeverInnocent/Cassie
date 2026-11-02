@@ -6,16 +6,10 @@
 // description of how that specific bot should appear:
 //
 //   • `displayStatus` — the gateway status pill ("online" / "idle" / "dnd" /
-//     "invisible") OR one of two special device-hint values: "mobile" (green
-//     mobile-phone icon) or "web" (browser icon). Can also be an ARRAY of
-//     values — when an array, the manager rotates through them every
-//     `ROTATION_INTERVAL_MS` (multi-displayStatus). Device hints ("mobile" /
-//     "web") can only be installed at gateway IDENTIFY time, so if you mix
-//     one into an array, the device icon is decided by the FIRST value at
-//     boot and cannot change later. Discord's presence protocol only has
-//     three device buckets total — desktop, mobile, web — so those are the
-//     only two "special icon" values that exist; there's no VR/wearable/
-//     console bucket to spoof into.
+//     "invisible") OR a special device hint: "mobile", "web", or "vr". Device
+//     hints can only be installed at gateway IDENTIFY time, so if you mix one
+//     into an array, the device icon is decided by the FIRST value at boot and
+//     cannot change later.
 //
 //   • `mode` — what kind of thing this bot displays:
 //       - "presence" → an activity ("Listening to ...", "Watching ...", etc.)
@@ -41,7 +35,7 @@ import type { ActivityType as _ActivityType } from "discord.js";
 /** How long (ms) StatusManager waits between entries when a rotation is "multi". */
 export const ROTATION_INTERVAL_MS = 10101;
 
-export type DisplayStatus = "online" | "idle" | "dnd" | "invisible" | "mobile" | "web";
+export type DisplayStatus = "online" | "idle" | "dnd" | "invisible" | "mobile" | "web" | "vr";
 export type DisplayMode = "presence" | "status";
 export type RotationMode = "single" | "multi";
 export type ActivityKind =
@@ -96,7 +90,7 @@ export const botInstances: BotInstance[] = [
     buildName: "Cassie",
     clientId: "956120503523889172",
     name: "Main",
-    displayStatus: "mobile",
+    displayStatus: "vr",
     mode: "status",
     presenceRotation: "multi",
     presenceEntries: [
@@ -124,7 +118,7 @@ export const botInstances: BotInstance[] = [
   {
     buildName: "Sin (Testing)",
     clientId: "1542129160346935336",
-    name: "TheSecond",
+    name: "TEST",
     displayStatus: "dnd",
     mode: "status",
     presenceRotation: "single",
@@ -198,6 +192,13 @@ export function instanceUsesWeb(inst: BotInstance): boolean {
   const ds = inst.displayStatus;
   if (Array.isArray(ds)) return ds.includes("web");
   return ds === "web";
+}
+
+/** Helper: returns true if the instance has a "vr" display status anywhere. */
+export function instanceUsesVR(inst: BotInstance): boolean {
+  const ds = inst.displayStatus;
+  if (Array.isArray(ds)) return ds.includes("vr");
+  return ds === "vr";
 }
 
 // Re-export ActivityType for callers that already know they want it.

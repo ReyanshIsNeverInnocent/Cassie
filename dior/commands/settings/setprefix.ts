@@ -64,6 +64,11 @@ export async function prefixExecute(
     return;
   }
 
+  if (input === 'reset') {
+    await message.reply(reply(`${emojis.redcross} The prefix \`reset\` is reserved and cannot be used.`));
+    return;
+  }
+
   if (!client.db) {
     await message.reply(reply(`${emojis.redcross} Database is not connected. Please try again later.`));
     return;
@@ -97,6 +102,11 @@ export async function slashExecute(
   }
 
   const input: string = interaction.options.getString('new_prefix', true).trim();
+
+  if (input.toLowerCase() === 'reset') {
+    await interaction.reply({ ...reply(`${emojis.redcross} The prefix \`reset\` is reserved and cannot be used.`), flags: MessageFlags.Ephemeral });
+    return;
+  }
 
   if (input.length > MAX_LEN) {
     await interaction.reply({ ...reply(`${emojis.redcross} Prefix is too long — maximum is **${MAX_LEN}** characters.`), flags: MessageFlags.Ephemeral });

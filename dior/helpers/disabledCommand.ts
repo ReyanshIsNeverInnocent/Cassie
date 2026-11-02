@@ -8,6 +8,7 @@ const COMMAND_MANAGEMENT_COMMANDS = new Set([
   'disable-command',
   'disable-category',
   'enable-command',
+  'enable-category',
 ]);
 
 export async function getDisabledCommandStatus(

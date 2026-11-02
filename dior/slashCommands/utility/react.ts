@@ -3,7 +3,7 @@ import { SlashCommandBuilder } from 'discord.js';
 
 export const data = new SlashCommandBuilder()
   .setName('react')
-  .setDescription('React to a message with an emoji.')
+  .setDescription('React to a message with one or more emojis.')
   .addStringOption((o) =>
     o.setName('message_id')
       .setDescription('The ID of the message to react to.')
@@ -11,6 +11,6 @@ export const data = new SlashCommandBuilder()
   )
   .addStringOption((o) =>
     o.setName('emoji')
-      .setDescription('Unicode emoji, custom emoji name, or emoji ID to react with.')
+      .setDescription('One or more emojis, separated by spaces.')
       .setRequired(true),
   );

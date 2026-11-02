@@ -12,7 +12,12 @@ export const options = {
   cooldown: 0,
 };
 
-const MANAGEMENT_COMMANDS = new Set(['disable-command', 'disable-category', 'enable-command']);
+const MANAGEMENT_COMMANDS = new Set([
+  'disable-command',
+  'disable-category',
+  'enable-command',
+  'enable-category',
+]);
 
 function resolveCategoryCommand(client: CassieClient, input: string): { name: string; command: any } | null {
   const name = input.toLowerCase();

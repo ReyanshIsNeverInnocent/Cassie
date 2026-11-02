@@ -8,13 +8,9 @@
 // Shard assignment is read from discord-hybrid-sharding's `getInfo()`, which
 // reads environment variables injected by the ClusterManager in `index.ts`.
 //
-// Device icon (mobile / web):
-//   If the matched BotInstance has displayStatus === 'mobile' or 'web', we
-//   rewrite `this.ws.options.identifyProperties` right after super() — before
-//   login — so Discord sees 'Discord Android' (mobile) or a browser signature
-//   (web) in the IDENTIFY payload. Discord's presence protocol only has three
-//   device buckets (desktop/mobile/web), so these are the only two spoofable
-//   non-default icons.
+// Device icon (mobile / web / VR):
+//   Device hints are applied through identifyProperties before login so the
+//   gateway receives them in IDENTIFY. Discord does not document these values.
 //
 // Initial presence:
 //   StatusManager.buildInitialPresenceFor() is called before super() so the
@@ -38,6 +34,7 @@ import {
   firstDisplayStatus,
   instanceUsesMobile,
   instanceUsesWeb,
+  instanceUsesVR,
   type BotInstance,
 } from '../config/botInstances.js';
 import { StatusManager } from './StatusManager.js';
@@ -67,6 +64,15 @@ function buildClientOptions() {
         browser: 'Chrome',
         os:      'Windows',
         device:  '',
+      };
+      return new SimpleShardingStrategy(manager);
+    };
+  } else if (matched && instanceUsesVR(matched) && firstDisplayStatus(matched) === 'vr') {
+    ws.buildStrategy = (manager: any) => {
+      manager.options.identifyProperties = {
+        browser: 'Discord VR',
+        os:      'android',
+        device:  'Discord VR',
       };
       return new SimpleShardingStrategy(manager);
     };
@@ -233,5 +239,10 @@ export class CassieClient extends Client {
   /** Returns true if this instance is configured to show the web (browser) indicator. */
   usesWebIndicator(): boolean {
     return !!(this.matchedInstance && instanceUsesWeb(this.matchedInstance));
+  }
+
+  /** Returns true if this instance is configured to show the VR indicator. */
+  usesVRIndicator(): boolean {
+    return !!(this.matchedInstance && instanceUsesVR(this.matchedInstance));
   }
 }

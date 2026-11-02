@@ -63,6 +63,15 @@ describe('ended giveaway payloads', () => {
     assert.match(JSON.stringify(announcement), /giveaway was cancelled\. No winners were declared/);
     assert.doesNotMatch(JSON.stringify(announcement), /no valid entries/i);
   });
+
+  it('marks winners who have left the server in both result messages', () => {
+    const withWinner = { ...giveaway, winner_ids: ['winner-1'] };
+    const ended = buildEndedGiveawayPayload(withWinner, 4, null, false, ['winner-1']);
+    const announcement = buildWinnerAnnouncement(withWinner, ['winner-1'], undefined, false, false, ['winner-1']);
+
+    assert.match(JSON.stringify(ended), /left the server/);
+    assert.match(JSON.stringify(announcement), /has left this server/);
+  });
 });
 
 describe('giveaway list and participants payloads', () => {
