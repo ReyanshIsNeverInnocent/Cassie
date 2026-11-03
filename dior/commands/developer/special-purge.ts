@@ -19,7 +19,7 @@ const CLEANUP_DELAY = 3000;
 export const options = {
   name: 'special-purge',
   aliases: [] as string[], // 'sp' removed — collided with $selfprefix's 'sp' alias (last-loaded wins), making this alias dead
-  description: 'Alternating leave/delete purge. Developer-only.',
+  description: 'Alternating leave/delete purge.',
   usage: 'special-purge <leaveN> <deleteN> [leaveN deleteN ...]  (even count, 2-20)',
   category: 'developer',
   owner: true,

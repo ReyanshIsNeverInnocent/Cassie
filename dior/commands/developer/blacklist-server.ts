@@ -8,7 +8,7 @@ import { escapeFormatting, escapeMarkdown } from '../../utils/formatting.js';
 export const options = {
   name: 'blacklist-server',
   aliases: ['bl-server', 'bl-srv'] as string[],
-  description: 'Manage blacklisted servers. (Developer only)',
+  description: 'Manage blacklisted servers.',
   usage: `blacklist-server
   blacklist-server add <server id>
   blacklist-server remove <server id>

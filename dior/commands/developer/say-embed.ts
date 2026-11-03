@@ -20,7 +20,7 @@ import { sendError } from '../../components/statusMessages.js';
 export const options = {
   name: 'say-embed',
   aliases: ['say-em'] as string[],
-  description: 'Send a raw embed JSON payload as the bot. (Developer only)',
+  description: 'Send a raw embed JSON payload as the bot.',
   usage: `say-embed <json>
   say-embed (with a .json/.txt attachment)`,
   category: 'developer',

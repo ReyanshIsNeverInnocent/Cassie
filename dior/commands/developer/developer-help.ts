@@ -17,7 +17,7 @@ import type { CassieClient } from '../../structures/CassieClient.js';
 export const options = {
   name: 'developer-help',
   aliases: ['dev-help'],
-  description: 'Show the developer-only commands.',
+  description: 'Show the developer commands.',
   usage: 'developer-help',
   category: 'developer',
   owner: true,
@@ -35,7 +35,7 @@ export async function prefixExecute(message: any, _args: string[], client: Cassi
   const lines = commands.map((command) => {
     const name = command.options?.name ?? 'unknown';
     const description = command.options?.description?.replace(/\s+/g, ' ').trim();
-    return `${emojis.redGlowPoint} **${name}:** ${description ? `(${description})` : '(No description)'}`;
+    return `${emojis.redGlowPoint} **${name}:** ${description ?? 'No description'}`;
   });
   if (!lines.length) lines.push(`${emojis.redGlowPoint} No developer-only commands found.`);
 

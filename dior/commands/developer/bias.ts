@@ -20,7 +20,7 @@ import { resolveUser } from '../../helpers/userResolver.js';
 export const options = {
   name:        'bias',
   aliases:     [] as string[],
-  description: 'Set a fixed rating percentage bias for a user. (Developer only)',
+  description: 'Set a fixed rating percentage bias for a user.',
   usage:       'bias <cute|gay|autistic|intelligent|simp|rizz> <@user|ID|username> <amount|infinity|remove>',
   category:    'developer',
   owner:       true,

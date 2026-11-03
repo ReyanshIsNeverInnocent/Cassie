@@ -31,7 +31,7 @@ const STOP_FLAG_PATH = join(DIST_ROOT, '.stop-flag');
 export const options = {
   name: 'stop-bot',
   aliases: ['s-bot'] as string[],
-  description: 'Stop the bot completely. (Developer only)',
+  description: 'Stop the bot completely.',
   usage: 'stop-bot',
   category: 'developer',
   owner: true,

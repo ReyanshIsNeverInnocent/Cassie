@@ -17,7 +17,7 @@ import {
 export const options = {
   name: 'emoji-upload',
   aliases: ['emu'] as string[],
-  description: 'Upload an attached image to one of the emoji servers (developer only).',
+  description: 'Upload an attached image to one of the emoji servers.',
   usage: 'emoji-upload <image attachment>',
   category: 'developer',
   owner: true,

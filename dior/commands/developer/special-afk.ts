@@ -31,7 +31,7 @@ import { authorOnlyFilter } from '../../helpers/panelGuard.js';
 export const options = {
   name: 'special-afk',
   aliases: ['specialafk', 'devafk'] as string[],
-  description: 'Set an AFK with a custom Since/Till time. (Developer only)',
+  description: 'Set an AFK with a custom Since/Till time.',
   usage: `special-afk <time> <reason>
   special-afk <time> <reason> <image URL>
   special-afk <time> <reason> [attach an image]`,

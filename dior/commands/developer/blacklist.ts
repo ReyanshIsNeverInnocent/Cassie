@@ -8,7 +8,7 @@ import { buildBlacklistListPayload } from '../../components/developer/blacklistL
 export const options = {
   name: 'blacklist',
   aliases: ['bl'] as string[],
-  description: 'Manage blacklisted users. (Developer only)',
+  description: 'Manage blacklisted users.',
   usage: `blacklist add <user id | mention | username>
   blacklist remove <user id | mention | username>
   blacklist list

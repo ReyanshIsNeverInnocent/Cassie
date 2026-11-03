@@ -17,7 +17,7 @@ import { sendError } from '../../components/statusMessages.js';
 export const options = {
   name: 'say-cv2',
   aliases: ['say-components', 'say-c'] as string[],
-  description: 'Send a raw Components V2 JSON payload as the bot. (Developer only)',
+  description: 'Send a raw Components V2 JSON payload as the bot.',
   usage: `say-cv2 <json>
   say-cv2 (with a .json/.txt attachment)`,
   category: 'developer',

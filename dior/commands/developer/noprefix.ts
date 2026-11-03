@@ -10,7 +10,7 @@ import { sendNoprefixStatus } from '../settings/noprefix.js';
 export const options = {
   name: 'glnoprefix',
   aliases: ['gnop'] as string[],
-  description: 'Manage no-prefix access. (Developer only)',
+  description: 'Manage no-prefix access.',
   usage: `noprefix add <user> [duration]   — e.g. 30m 2h 7d 1mo 1y (omit for permanent)
   noprefix remove <user>
   noprefix extend <user> <duration>

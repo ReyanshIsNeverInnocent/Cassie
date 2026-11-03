@@ -10,7 +10,7 @@ import { authorOnlyFilter } from '../../helpers/panelGuard.js';
 export const options = {
   name: 'restart-bot',
   aliases: ['res-bot'] as string[],
-  description: 'Restart the bot. (Developer only)',
+  description: 'Restart the bot.',
   usage: 'restart-bot',
   category: 'developer',
   owner: true,

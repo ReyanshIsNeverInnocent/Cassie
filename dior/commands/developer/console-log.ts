@@ -6,7 +6,7 @@ import { sendWrongUsage } from '../../components/wrongUsage.js';
 export const options = {
   name: 'console-log',
   aliases: [] as string[],
-  description: 'Log text to the console. (Developer only)',
+  description: 'Log text to the console.',
   usage: 'console-log <text>',
   category: 'developer',
   owner: true,

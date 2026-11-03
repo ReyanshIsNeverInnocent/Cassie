@@ -11,7 +11,7 @@ import { runGlobalArPanel } from '../../components/developer/global-ar.js';
 export const options = {
   name: 'global-ar',
   aliases: ['gar', 'globalar'] as string[],
-  description: 'Manage global autoresponders across all guilds. (Developer only)',
+  description: 'Manage global autoresponders across all guilds.',
   usage: 'global-ar',
   category: 'developer',
   owner: true,

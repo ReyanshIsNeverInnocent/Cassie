@@ -5,7 +5,7 @@ import { resolveEmoji } from '../../helpers/emojiResolver.js';
 export const options = {
   name: 'emoji-markdown',
   aliases: ['emmd', 'emoji-md'] as string[],
-  description: 'Get the markdown for one or more custom emojis (developer only).',
+  description: 'Get the markdown for one or more custom emojis.',
   usage: `emoji-markdown <emoji id or name or emoji>
   emoji-markdown <emoji1> <emoji2>
   emoji-markdown <emoji1>|$|<emoji2>`,

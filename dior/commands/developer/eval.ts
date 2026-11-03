@@ -5,7 +5,7 @@ import { evaluateCode, rawCommandInput } from '../../helpers/devToolkit.js';
 export const options = {
   name: 'eval',
   aliases: ['e'],
-  description: 'Evaluate developer-only JavaScript in a time-limited context.',
+  description: 'Evaluate JavaScript in a time-limited context.',
   usage: 'eval <javascript>',
   category: 'developer',
   owner: true,
