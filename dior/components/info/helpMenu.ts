@@ -176,28 +176,6 @@ function getCategoryMap(client: CassieClient): Map<string, string[]> {
   return map;
 }
 
-function buildHeaderSection(client: CassieClient, compact = false, guildId?: string | null): SectionBuilder {
-  // Prefer the bot's server-specific avatar when inside a guild
-  const guild      = guildId ? client.guilds.cache.get(guildId) : null;
-  const botMember  = guild?.members?.me;
-  const avatarUrl  =
-    botMember?.displayAvatarURL({ forceStatic: false }) ??
-    client.user?.displayAvatarURL({ forceStatic: false }) ??
-    '';
-  const descContent = compact
-    ? descriptions.help.compact
-    : descriptions.help.default;
-
-  const section = new SectionBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`# __${client.config.botName}__ ${emojis.brownishSparkles}`),
-    new TextDisplayBuilder().setContent(descContent),
-  );
-  if (avatarUrl) {
-    section.setThumbnailAccessory(new ThumbnailBuilder().setURL(avatarUrl));
-  }
-  return section;
-}
-
 function buildHelpBanner(container: ContainerBuilder): ContainerBuilder {
   return container.addMediaGalleryComponents(
     new MediaGalleryBuilder().addItems(
@@ -206,8 +184,8 @@ function buildHelpBanner(container: ContainerBuilder): ContainerBuilder {
   );
 }
 
-function buildLinkRow(): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+function buildLinkRow(includeHome = false): ActionRowBuilder<ButtonBuilder> {
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setStyle(ButtonStyle.Link)
       .setLabel('Commands Page on Web')
@@ -219,6 +197,15 @@ function buildLinkRow(): ActionRowBuilder<ButtonBuilder> {
       .setEmoji({ id: '1494789896567525416', name: 'LustForLife_VINYL', animated: true })
       .setURL(config.supportServer),
   );
+  if (includeHome) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setStyle(ButtonStyle.Secondary)
+        .setLabel('Home')
+        .setCustomId('help:home'),
+    );
+  }
+  return row;
 }
 
 function getDefaultAccentColor(): number {
@@ -228,6 +215,7 @@ function getDefaultAccentColor(): number {
 function buildNavDropdown(
   client: CassieClient,
   disabled = false,
+  selectedCategory?: string,
 ): ActionRowBuilder<StringSelectMenuBuilder> {
   const validCategories = getCategoryMap(client);
 
@@ -239,12 +227,16 @@ function buildNavDropdown(
         .setValue(cat.name)
         .setLabel(cat.displayName)
         .setDescription(cat.description)
-        .setEmoji({ id: '1472173690274971740', name: 'green_sparkles', animated: true }),
+        .setEmoji({ id: '1472173690274971740', name: 'green_sparkles', animated: true })
+        .setDefault(cat.name.toLowerCase() === selectedCategory?.toLowerCase()),
     );
 
+  const selectedCategoryInfo = categories.find(
+    (category) => category.name.toLowerCase() === selectedCategory?.toLowerCase(),
+  );
   const menu = new StringSelectMenuBuilder()
     .setCustomId('help:nav')
-    .setPlaceholder('Browse commands by category.')
+    .setPlaceholder(selectedCategoryInfo?.displayName ?? 'Browse commands by category.')
     .addOptions(options)
     .setDisabled(disabled);
 
@@ -329,11 +321,6 @@ export async function buildCategoryPayload(
   const cmdList = cmds.map((c) => `\`${c}\``).join(', ');
 
   const container = buildHelpBanner(new ContainerBuilder().setAccentColor(getDefaultAccentColor()))
-    .addSeparatorComponents(
-      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
-    )
-    .addSectionComponents(buildHeaderSection(client, true, _guildId))
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
         `## ${emojis.blackCross} ${displayName}\n${cmdList || '*No commands available.*'}`,
@@ -342,8 +329,8 @@ export async function buildCategoryPayload(
     .addSeparatorComponents(
       new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
     )
-    .addActionRowComponents(buildLinkRow())
-    .addActionRowComponents(buildNavDropdown(client, disabled) as any)
+    .addActionRowComponents(buildLinkRow(true))
+    .addActionRowComponents(buildNavDropdown(client, disabled, categoryName) as any)
     .addSeparatorComponents(
       new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
     )
