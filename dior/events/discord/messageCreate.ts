@@ -322,7 +322,9 @@ export async function execute(message: any, client: CassieClient): Promise<void>
   // `isDeveloper: true` for compatibility.
   const devOnly = command.options?.owner === true || command.options?.isDeveloper === true;
   if (devOnly && !isDeveloper) {
-    await reservedForDeveloper({ message }).catch((): null => null);
+    if (usedPrefix !== '') {
+      await reservedForDeveloper({ message }).catch((): null => null);
+    }
     return;
   }
   if (client.db) {

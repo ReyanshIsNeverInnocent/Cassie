@@ -33,6 +33,10 @@ import type {
   VoiceMasterSetupDoc,
 } from "../../database/database.js";
 import { refreshVoiceMasterPanel } from "../../helpers/voiceMaster.js";
+import {
+  getResourceAttachment,
+  getResourceAttachmentUrl,
+} from "../../helpers/resourceAttachments.js";
 
 function panelButton(emoji: string, action: string): ButtonBuilder {
   return new ButtonBuilder()
@@ -54,7 +58,7 @@ export function buildVoiceMasterPanelPayload(
   const isHidden = !!state?.hidden;
   const accentColor = parseInt(config.defaultAccentColor.replace("#", ""), 16);
 
-  const voicemasterImageUrl = config.voicemasterImageUrl?.trim();
+  const voicemasterImage = config.voicemasterImage?.trim();
   const description = descriptions.voicemaster.description;
 
   const detailsSection = new SectionBuilder().addTextDisplayComponents(
@@ -70,10 +74,10 @@ export function buildVoiceMasterPanelPayload(
   const container = new ContainerBuilder()
     .setAccentColor(accentColor);
 
-  if (voicemasterImageUrl) {
+  if (voicemasterImage) {
     container.addMediaGalleryComponents(
       new MediaGalleryBuilder().addItems(
-        new MediaGalleryItemBuilder().setURL(voicemasterImageUrl),
+        new MediaGalleryItemBuilder().setURL(getResourceAttachmentUrl(voicemasterImage)),
       ),
     );
   }
@@ -115,6 +119,7 @@ export function buildVoiceMasterPanelPayload(
 
   return {
     components: [container],
+    files: voicemasterImage ? [getResourceAttachment(voicemasterImage)] : [],
     flags: MessageFlags.IsComponentsV2,
     allowedMentions: { parse: [] },
   };

@@ -91,7 +91,7 @@ export interface Config {
   /** Public commands documentation page URL. */
   commandsPageUrl: string;
   /** Header image URL used by the help panel. */
-  helpPanelImageUrl: string;
+  helpPanelImage: string;
   /** Support server guild ID — its saved name style is used as the default for all other guilds. */
   supportServerId: string;
 
@@ -131,9 +131,9 @@ export interface Config {
     volume: number;
   };
   /** Image shown on the `filter help` / `filter available` guide. */
-  filterHelpImageUrl: string;
-  /** A custom banner image for the VoiceMaster CV2 panel. Set to a direct image URL when you want a custom header. */
-  voicemasterImageUrl: string;
+  filterHelpImage: string;
+  /** Local resource used as the custom banner image for the VoiceMaster CV2 panel. */
+  voicemasterImage: string;
   // 9. Default presence
   /**
    * Fallback presence — applied only when no entry in
@@ -215,8 +215,7 @@ export const config: Config = {
   // ── 6. Links ───────────────────────────────────────────────────────────────
   supportServer: "https://discord.gg/YpCfcCTXdv",
   commandsPageUrl: "https://cassiewho.vercel.app/commands",
-  helpPanelImageUrl:
-    "https://i.ibb.co/hJKnyW7M/help-image-3.png",
+  helpPanelImage: 'helpImage.png',
   supportServerId: "1493286181885050961",
 
   // ── 7. Webhooks (from .env) ────────────────────────────────────────────────
@@ -261,8 +260,8 @@ export const config: Config = {
     artist: 'The Weeknd',
     volume: 67,
   },
-  filterHelpImageUrl: 'https://i.ibb.co/gLryQTK4/Vinyl-aesthetic-music-1.jpg',
-  voicemasterImageUrl: 'https://i.ibb.co/0pGmGqTw/Better-Voicemaster-Image.png',
+  filterHelpImage: 'filters.jpg',
+  voicemasterImage: 'voicemaster.png',
 
   // ── 8. Default presence ────────────────────────────────────────────────────
   // Fallback only — used when no botInstances.ts entry matches the running

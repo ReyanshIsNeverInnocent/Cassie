@@ -19,10 +19,14 @@ import {
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { config }              from '../../config.js';
 import { developerPanelConfig as dev } from '../../config/developer/developerPanel.js';
+import {
+  getResourceAttachment,
+  getResourceAttachmentUrl,
+} from '../../helpers/resourceAttachments.js';
 
 export const options = {
   name:        'developer',
-  aliases:     ['dev', 'creator'] as string[],
+  aliases:     [] as string[],
   description: 'Shows info about the developer behind this bot.',
   usage:       'developer',
   category:    'info',
@@ -34,10 +38,10 @@ function buildPayload(requestedBy: string): object {
   const container = new ContainerBuilder().setAccentColor(parseInt(config.defaultAccentColor.replace('#', ''), 16));
 
   // Optional banner image at the top
-  if (dev.bannerUrl) {
+  if (dev.bannerImage) {
     container.addMediaGalleryComponents(
       new MediaGalleryBuilder().addItems(
-        new MediaGalleryItemBuilder().setURL(dev.bannerUrl),
+        new MediaGalleryItemBuilder().setURL(getResourceAttachmentUrl(dev.bannerImage)),
       ),
     );
     container.addSeparatorComponents(
@@ -56,7 +60,7 @@ function buildPayload(requestedBy: string): object {
         ),
       )
       .setThumbnailAccessory(
-        new ThumbnailBuilder().setURL(dev.avatarUrl),
+        new ThumbnailBuilder().setURL(getResourceAttachmentUrl(dev.avatarImage)),
       ),
   );
 
@@ -104,6 +108,10 @@ function buildPayload(requestedBy: string): object {
 
   return {
     components:      [container],
+    files:            [
+      ...(dev.bannerImage ? [getResourceAttachment(dev.bannerImage)] : []),
+      getResourceAttachment(dev.avatarImage),
+    ],
     flags:           MessageFlags.IsComponentsV2,
     allowedMentions: { parse: [] },
   };

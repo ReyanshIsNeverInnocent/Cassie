@@ -22,6 +22,10 @@ import type { FilterOptions } from 'shoukaku';
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { sendError, sendInfo, sendSuccess } from '../../components/statusMessages.js';
 import { emojis } from '../../emojis.js';
+import {
+  getResourceAttachment,
+  getResourceAttachmentUrl,
+} from '../../helpers/resourceAttachments.js';
 
 export const options = {
   name: 'filter',
@@ -291,12 +295,13 @@ export function buildFilterHelpPayload(client: CassieClient): any {
     )
     .addMediaGalleryComponents(
       new MediaGalleryBuilder().addItems(
-        new MediaGalleryItemBuilder().setURL(client.config.filterHelpImageUrl),
+        new MediaGalleryItemBuilder().setURL(getResourceAttachmentUrl(client.config.filterHelpImage)),
       ),
     );
 
   return {
     components: [container],
+    files: [getResourceAttachment(client.config.filterHelpImage)],
     flags: MessageFlags.IsComponentsV2,
     allowedMentions: { parse: [] },
   };

@@ -116,6 +116,8 @@ export const emojis = {
   penguinFacepalm: '<:penguinFacepalm:1555551364388491374>',
   furryRizz: '<:rizzEmoji:1562776070208626758>',
   pinkHeartsWithSparkles: '<:pinkHeartsWithSparkles:1543232959656624288>',
+  lollipop: '<:lollipopShouldntBeSexualized:1565071061182054584>',
+  redGlowPoint: '<:redGlowPoint:1567071923538497558>',
 
   // Honeypot
   honeypot:       '🍯',

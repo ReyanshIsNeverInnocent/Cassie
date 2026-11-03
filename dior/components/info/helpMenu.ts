@@ -20,6 +20,10 @@ import { emojis } from '../../emojis.js';
 import { categories, excludedCategories } from '../../config/categories.js';
 import { descriptions } from '../../config/descriptions.js';
 import { config } from '../../config.js';
+import {
+  getResourceAttachment,
+  getResourceAttachmentUrl,
+} from '../../helpers/resourceAttachments.js';
 
 const NO_USER_PING = { parse: [] as any[] };
 
@@ -197,7 +201,7 @@ function buildHeaderSection(client: CassieClient, compact = false, guildId?: str
 function buildHelpBanner(container: ContainerBuilder): ContainerBuilder {
   return container.addMediaGalleryComponents(
     new MediaGalleryBuilder().addItems(
-      new MediaGalleryItemBuilder().setURL(config.helpPanelImageUrl),
+      new MediaGalleryItemBuilder().setURL(getResourceAttachmentUrl(config.helpPanelImage)),
     ),
   );
 }
@@ -304,6 +308,7 @@ export async function buildHelpMenuPayload(
 
   return {
     components: [container],
+    files: [getResourceAttachment(config.helpPanelImage)],
     flags: MessageFlags.IsComponentsV2 | MessageFlags.SuppressNotifications,
     allowedMentions: NO_USER_PING,
   };
@@ -346,6 +351,7 @@ export async function buildCategoryPayload(
 
   return {
     components: [container],
+    files: [getResourceAttachment(config.helpPanelImage)],
     flags: MessageFlags.IsComponentsV2 | MessageFlags.SuppressNotifications,
   };
 }

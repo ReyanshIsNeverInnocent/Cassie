@@ -9,6 +9,10 @@ import {
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { config } from '../../config.js';
 import { sendError } from '../../components/statusMessages.js';
+import {
+  getResourceAttachment,
+  getResourceAttachmentUrl,
+} from '../../helpers/resourceAttachments.js';
 
 export const options = {
   name: 'emoji-upload',
@@ -21,7 +25,7 @@ export const options = {
 };
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'jfif', 'png', 'gif', 'webp', 'avif']);
-const EMOJI_SERVER_THUMBNAIL = 'https://i.ibb.co/ym7qk0N1/image.png';
+const EMOJI_SERVER_THUMBNAIL = 'emoji-upload.png';
 const PROMPT_TIMEOUT = 5 * 60_000;
 
 export const emojiUploadSessions = new Map<string, string>();
@@ -72,13 +76,14 @@ function serverListPayload(servers: { guild: any; staticSlots: number; animatedS
     .addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(lines.join('\n')))
-        .setThumbnailAccessory(new ThumbnailBuilder().setURL(EMOJI_SERVER_THUMBNAIL)),
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(getResourceAttachmentUrl(EMOJI_SERVER_THUMBNAIL))),
     )
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
     .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Enter the server number.'));
 
   return {
     components: [container],
+    files: [getResourceAttachment(EMOJI_SERVER_THUMBNAIL)],
     flags: MessageFlags.IsComponentsV2,
     allowedMentions: { parse: [] },
   };

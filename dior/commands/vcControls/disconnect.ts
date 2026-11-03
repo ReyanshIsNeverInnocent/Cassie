@@ -51,6 +51,7 @@ async function handle(
       continue;
     }
 
+    const channelId = voiceState.channelId;
     const disconnected = await targetMember.voice.disconnect().catch((): null => null);
     if (!disconnected) {
       results.push(`Failed to disconnect <@${targetUser.id}>.`);
@@ -60,8 +61,8 @@ async function handle(
 
     results.push(
       targetUser.id === commandUserId
-        ? `Disconnected you from <#${voiceState.channelId}>.`
-        : `Disconnected <@${targetUser.id}> from <#${voiceState.channelId}>.`,
+        ? `Disconnected you from <#${channelId}>.`
+        : `Disconnected <@${targetUser.id}> from <#${channelId}>.`,
     );
   }
 

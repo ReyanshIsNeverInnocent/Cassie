@@ -11,6 +11,7 @@ import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import { readFileSync } from 'node:fs';
 import type { RatingContext } from '../config/rating/ratingBackgrounds.js';
 import { ratingBackgrounds } from '../config/rating/ratingBackgrounds.js';
+import { getResourcePath } from '../helpers/resourceAttachments.js';
 
 // ── Font loading ───────────────────────────────────────────────────────────────
 try { GlobalFonts.loadFontsFromDir('/usr/share/fonts'); } catch { /* ignore */ }
@@ -303,7 +304,7 @@ export async function generateRatingCanvas(opts: RatingCanvasOptions): Promise<B
   const isInfinite = !isFinite(pct);
   const isRare     = isFinite(pct) && pct > 100;
   const avatarURL = avatarURLs.find(Boolean);
-  const backgroundURL = ratingBackgrounds[context];
+  const backgroundPath = getResourcePath(ratingBackgrounds[context]);
   const [img, background] = await Promise.all([
     (async () => {
       for (const url of avatarURLs) {
@@ -313,7 +314,7 @@ export async function generateRatingCanvas(opts: RatingCanvasOptions): Promise<B
       }
       return null;
     })(),
-    backgroundURL ? loadImage(backgroundURL).catch((): null => null) : Promise.resolve(null),
+    loadImage(backgroundPath).catch((): null => null),
   ]);
 
   // ── 1. User-provided background ──────────────────────────────────────────

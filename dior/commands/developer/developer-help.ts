@@ -1,6 +1,22 @@
+import {
+  ContainerBuilder,
+  MessageFlags,
+  SectionBuilder,
+  SeparatorBuilder,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
+} from 'discord.js';
+import { config } from '../../config.js';
+import { emojis } from '../../emojis.js';
+import {
+  getResourceAttachment,
+  getResourceAttachmentUrl,
+} from '../../helpers/resourceAttachments.js';
+import type { CassieClient } from '../../structures/CassieClient.js';
+
 export const options = {
   name: 'developer-help',
-  aliases: ['dev-help', 'devh'],
+  aliases: ['dev-help'],
   description: 'Show the developer-only commands.',
   usage: 'developer-help',
   category: 'developer',
@@ -8,38 +24,56 @@ export const options = {
   cooldown: 0,
 };
 
-export async function prefixExecute(message: any) {
-  return message.channel.send(
-    [
-      '**Developer Commands**',
-      '',
-      '`$bias` — Manage developer bias settings',
-      '`$blacklist` — Manage user blacklists',
-      '`$blacklist-server` — Manage server blacklists',
-      '`$console-log` — View console logs',
-      '`$db` — Run read-only database diagnostics',
-      '`$disable-command` — Disable a command or list disabled commands',
-      '`$disable-category` — Disable every command in a category with optional exceptions',
-      '`$enable-command` — Re-enable a command or category',
-      '`$eval` — Evaluate JavaScript',
-      '`$exec` — Run an allowlisted diagnostic command',
-      '`$emoji-markdown` — Get markdown for one or more custom emojis',
-      '`$emoji-upload` — Upload an attached image to an emoji server',
-      '`$fixbotroles` — Rename the bot-managed roles',
-      '`$global-ar` — Manage global auto-responses',
-      '`$guild` — Inspect a guild',
-      '`$glnoprefix` — Manage user no-prefix access',
-      '`$note` — Manage developer notes',
-      '`$reload` — Reload a prefix command',
-      '`$restart-bot` — Restart the bot',
-      '`$say-cv2` — Send a Components V2 message',
-      '`$say-embed` — Send an embed as the bot',
-      '`$serverlist` — List the bot’s servers',
-      '`$source` — View a source file',
-      '`$special-afk` — Manage special AFK settings',
-      '`$special-purge` — Run special purge tools',
-      '`$developer-steal` (`$devsteal`) — Steal emojis, stickers, or images into mutual servers',
-      '`$stop-bot` — Stop the bot',
-    ].join('\n'),
-  );
+const DEVELOPER_HELP_IMAGE = 'developer-help.jpg';
+const MAX_SECTION_LENGTH = 3_500;
+
+export async function prefixExecute(message: any, _args: string[], client: CassieClient) {
+  const commands = [...client.commands.values()]
+    .filter((command) => command.options?.owner === true || command.options?.isDeveloper === true)
+    .sort((a, b) => (a.options?.name ?? '').localeCompare(b.options?.name ?? ''));
+
+  const lines = commands.map((command) => {
+    const name = command.options?.name ?? 'unknown';
+    const description = command.options?.description?.replace(/\s+/g, ' ').trim();
+    return `${emojis.redGlowPoint} **${name}:** ${description ? `(${description})` : '(No description)'}`;
+  });
+  if (!lines.length) lines.push(`${emojis.redGlowPoint} No developer-only commands found.`);
+
+  const sections: string[] = [];
+  let section = '';
+  for (const line of lines) {
+    if (section && section.length + line.length + 1 > MAX_SECTION_LENGTH) {
+      sections.push(section);
+      section = '';
+    }
+    section += `${section ? '\n' : ''}${line}`;
+  }
+  if (section) sections.push(section);
+
+  const container = new ContainerBuilder()
+    .setAccentColor(parseInt(config.defaultAccentColor.replace('#', ''), 16))
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`## ${emojis.lollipop} Developer Commands`),
+    )
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+
+  const [firstSection, ...remainingSections] = sections;
+  if (firstSection) {
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(firstSection))
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(getResourceAttachmentUrl(DEVELOPER_HELP_IMAGE))),
+    );
+  }
+  for (const commandsSection of remainingSections) {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(commandsSection));
+  }
+  container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+
+  await message.channel.send({
+    components: [container],
+    files: [getResourceAttachment(DEVELOPER_HELP_IMAGE)],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [] },
+  });
 }
