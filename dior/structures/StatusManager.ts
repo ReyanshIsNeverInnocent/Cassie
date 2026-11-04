@@ -89,6 +89,10 @@ export class StatusManager {
     return this.instance?.name ?? null;
   }
 
+  getActiveRotationCount(): number {
+    return this.timers.length;
+  }
+
   /** Build the activity payload that should be applied at gateway IDENTIFY. */
   static buildInitialPresenceFor(inst: BotInstance | null): {
     activities: any[];

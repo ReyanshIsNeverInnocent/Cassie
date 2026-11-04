@@ -1,5 +1,5 @@
 import { execFile as execFileCallback } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { basename, join, normalize, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -8,7 +8,7 @@ import { inspect } from 'node:util';
 import type { CassieClient } from '../structures/CassieClient.js';
 
 const execFile = promisify(execFileCallback);
-const WORKSPACE_ROOT = resolve(process.cwd());
+const WORKSPACE_ROOT = realpathSync(process.cwd());
 const MAX_OUTPUT = 5_500;
 const MAX_SOURCE = 8_000;
 const EXEC_TIMEOUT = 15_000;
@@ -16,11 +16,7 @@ const EVAL_TIMEOUT = 1_000;
 
 export function rawCommandInput(message: any, args: string[]): string {
   if (typeof message.commandRawArgs === 'string') {
-    const raw = message.commandRawArgs.trim();
-    // messageCreate preserves the raw tail with the active prefix token
-    // prepended (for example, "$ 1 + 1"). Remove that one routing token
-    // before passing the input to the toolkit command.
-    return raw.replace(/^\S+\s+/, '').trim();
+    return message.commandRawArgs.trim();
   }
   return args.join(' ').trim();
 }
@@ -64,20 +60,36 @@ export async function evaluateCode(
     result = vm.runInNewContext(`(${code})`, sandbox, { timeout: EVAL_TIMEOUT });
   } catch (expressionError) {
     try {
-      // Statement mode supports `$eval const x = ...; return x`.
-      result = vm.runInNewContext(`(async () => { ${code}\n})()`, sandbox, {
+      result = vm.runInNewContext(`(async () => (${code}\n))()`, sandbox, {
         timeout: EVAL_TIMEOUT,
       });
-    } catch (statementError) {
-      return `Evaluation error: ${statementError instanceof Error ? statementError.message : String(statementError)}\nExpression attempt: ${expressionError instanceof Error ? expressionError.message : String(expressionError)}`;
+    } catch (asyncExpressionError) {
+      try {
+        // Statement mode supports snippets with declarations and explicit returns.
+        result = vm.runInNewContext(`(async () => { ${code}\n})()`, sandbox, {
+          timeout: EVAL_TIMEOUT,
+        });
+      } catch (statementError) {
+        const statementMessage = statementError instanceof Error ? statementError.message : String(statementError);
+        const asyncMessage = asyncExpressionError instanceof Error ? asyncExpressionError.message : String(asyncExpressionError);
+        const expressionMessage = expressionError instanceof Error ? expressionError.message : String(expressionError);
+        throw new Error(`Could not evaluate snippet: ${statementMessage}\nAsync expression attempt: ${asyncMessage}\nExpression attempt: ${expressionMessage}`);
+      }
     }
   }
 
   if (result && typeof (result as Promise<unknown>).then === 'function') {
-    result = await Promise.race([
-      result as Promise<unknown>,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('async evaluation timed out')), 5_000)),
-    ]);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      result = await Promise.race([
+        result as Promise<unknown>,
+        new Promise((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('Async evaluation timed out after 5 seconds.')), 5_000);
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
   }
 
   const output = [
@@ -89,28 +101,43 @@ export async function evaluateCode(
 
 function isBlockedSourcePath(path: string): boolean {
   return path.split(/[\\/]+/).some((part) =>
-    part === '.env' ||
-    part.startsWith('.env.') ||
-    part === 'node_modules' ||
-    part === 'dist',
+    part.toLowerCase() === '.env' ||
+    part.toLowerCase().startsWith('.env.') ||
+    part.toLowerCase() === 'node_modules' ||
+    part.toLowerCase() === 'dist',
   );
 }
 
-export function readSource(requestedPath: string): string {
+export function readSource(requestedPath: string): { output: string; success: boolean } {
   const requested = requestedPath.trim();
-  if (!requested) return 'Usage: `$source <workspace-relative-file>`';
-  if (requested.includes('\0')) return 'Invalid path.';
+  if (!requested) return { output: 'Usage: `source <workspace-relative-file>`', success: false };
+  if (requested.includes('\0')) return { output: 'Invalid path.', success: false };
 
   const normalized = normalize(requested);
   const fullPath = resolve(WORKSPACE_ROOT, normalized);
   const rel = relative(WORKSPACE_ROOT, fullPath);
   if (!rel || rel.startsWith('..') || rel.includes(`..${normalize('/')}`) || isBlockedSourcePath(rel)) {
-    return 'That path is outside the allowed source tree or is blocked.';
+    return { output: 'That path is outside the allowed source tree or is blocked.', success: false };
   }
-  if (!existsSync(fullPath) || !statSync(fullPath).isFile()) return `File not found: \`${requested}\``;
 
-  const content = readFileSync(fullPath, 'utf8');
-  return `File: \`${rel}\`\n\n${limitOutput(content, MAX_SOURCE)}`;
+  try {
+    const resolvedPath = realpathSync(fullPath);
+    const resolvedRel = relative(WORKSPACE_ROOT, resolvedPath);
+    if (!resolvedRel || resolvedRel.startsWith('..') || resolvedRel.includes(`..${normalize('/')}`) || isBlockedSourcePath(resolvedRel)) {
+      return { output: 'That path resolves outside the allowed source tree or is blocked.', success: false };
+    }
+    if (!statSync(resolvedPath).isFile()) {
+      return { output: `Not a file: \`${requested}\``, success: false };
+    }
+
+    return {
+      output: `File: \`${resolvedRel}\`\n\n${limitOutput(readFileSync(resolvedPath, 'utf8'), MAX_SOURCE)}`,
+      success: true,
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { output: `Could not read \`${requested}\`: ${message}`, success: false };
+  }
 }
 
 type SafeExec = { command: string; args: string[]; label: string };
@@ -121,14 +148,17 @@ function parseSafeExec(input: string): SafeExec | null {
 
   const [command, ...args] = tokens;
   if (command === 'pwd' && args.length === 0) return { command, args, label: 'pwd' };
-  if (command === 'ls' && args.length <= 2 && args.every((arg) => !arg.startsWith('-') && !arg.includes('..'))) {
+  if (command === 'ls' && args.length <= 1 && args.every((arg) => !arg.startsWith('-') && !arg.includes('..'))) {
     return { command, args, label: `ls ${args.join(' ')}`.trim() };
   }
-  if (command === 'git' && args.length <= 3 && (
-    args[0] === 'status' ||
-    args[0] === 'branch' ||
-    (args[0] === 'log' && args.slice(1).every((arg) => /^-\w+$/.test(arg))) ||
-    (args[0] === 'diff' && args[1] === '--stat')
+  if (command === 'git' && (
+    (args.length === 1 && (args[0] === 'status' || args[0] === 'branch')) ||
+    (args[0] === 'log' && args.length <= 2 && (
+      args.length === 1 ||
+      /^-\d{1,2}$/.test(args[1]!) ||
+      args[1] === '--oneline'
+    )) ||
+    (args.length === 2 && args[0] === 'diff' && args[1] === '--stat')
   )) {
     return { command, args, label: `git ${args.join(' ')}` };
   }
@@ -143,23 +173,68 @@ function parseSafeExec(input: string): SafeExec | null {
   return null;
 }
 
-export async function executeSafeCommand(input: string): Promise<string> {
+export async function executeSafeCommand(input: string): Promise<{ output: string; success: boolean }> {
   const parsed = parseSafeExec(input);
   if (!parsed) {
-    return 'Allowed commands: `pwd`, `ls`, `git status`, `git branch`, `git log`, `git diff --stat`, `node --version`, `npm run build`, `npm run check:command-parity`.';
+    return {
+      output: 'Allowed commands: `pwd`, `ls [workspace-relative-directory]`, `git status`, `git branch`, `git log`, `git diff --stat`, `node --version`, `npm run build`, `npm run check:command-parity`.',
+      success: false,
+    };
   }
 
   try {
-    const result = await execFile(parsed.command, parsed.args, {
+    let command = parsed.command;
+    let args = parsed.args;
+
+    if (command === 'pwd') {
+      return { output: WORKSPACE_ROOT, success: true };
+    }
+    if (command === 'ls') {
+      const requestedPath = args[0] ?? '.';
+      const fullPath = resolve(WORKSPACE_ROOT, requestedPath);
+      let actualPath: string;
+      try {
+        actualPath = realpathSync(fullPath);
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        return { output: `Could not list that path: ${detail}`, success: false };
+      }
+      const rel = relative(WORKSPACE_ROOT, actualPath);
+      if (rel.startsWith('..') || rel.includes(`..${normalize('/')}`)) {
+        return { output: 'The path must stay inside the project workspace.', success: false };
+      }
+      const entries = readdirSync(actualPath, { withFileTypes: true })
+        .map((entry) => `${entry.isDirectory() ? '[dir] ' : ''}${entry.name}`);
+      return { output: entries.join('\n') || '(empty directory)', success: true };
+    }
+
+    if (command === 'npm' && process.platform === 'win32') {
+      command = process.env['ComSpec'] || 'cmd.exe';
+      args = ['/d', '/s', '/c', `npm.cmd ${parsed.args.join(' ')}`];
+    }
+
+    const result = await execFile(command, args, {
       cwd: WORKSPACE_ROOT,
       timeout: EXEC_TIMEOUT,
       maxBuffer: 512 * 1024,
       shell: false,
     });
-    return `${parsed.label}\n\n${limitOutput([result.stdout, result.stderr].filter(Boolean).join('\n')) || '(no output)'}`;
-  } catch (error: any) {
-    const output = [error?.stdout, error?.stderr, error?.message].filter(Boolean).join('\n');
-    return `${parsed.label}\n\n${limitOutput(output)}`;
+    return {
+      output: `${parsed.label}\n\n${limitOutput([result.stdout, result.stderr].filter(Boolean).join('\n')) || '(no output)'}`,
+      success: true,
+    };
+  } catch (error: unknown) {
+    const stdout = typeof error === 'object' && error !== null && 'stdout' in error && typeof error.stdout === 'string'
+      ? error.stdout
+      : '';
+    const stderr = typeof error === 'object' && error !== null && 'stderr' in error && typeof error.stderr === 'string'
+      ? error.stderr
+      : '';
+    const message = error instanceof Error ? error.message : String(error);
+    const output = [stdout, stderr, message]
+      .filter(Boolean)
+      .join('\n');
+    return { output: `${parsed.label}\n\n${limitOutput(output)}`, success: false };
   }
 }
 
@@ -177,40 +252,57 @@ function findCommandFiles(dir: string): string[] {
 export async function reloadPrefixCommand(
   client: CassieClient,
   requestedName: string,
-): Promise<string> {
+): Promise<{ output: string; success: boolean }> {
   const requested = requestedName.toLowerCase().replace(/^\$/, '');
-  if (!requested) return 'Usage: `$reload <command>`';
+  if (!requested) return { output: 'Usage: `reload <command>`', success: false };
 
   const commandDir = join(WORKSPACE_ROOT, 'dist', 'dior', 'commands');
   const files = findCommandFiles(commandDir);
   let targetPath: string | null = null;
   let targetName = requested;
 
-  for (const file of files) {
-    const raw = await import(pathToFileURL(file).href);
-    const mod = raw.default ?? raw;
-    const name = mod.options?.name?.toLowerCase();
-    const aliases = (mod.options?.aliases ?? []).map((alias: string) => alias.toLowerCase());
-    if (name === requested || aliases.includes(requested)) {
-      targetPath = file;
-      targetName = name;
-      break;
+  try {
+    for (const file of files) {
+      const raw = await import(pathToFileURL(file).href);
+      const exported = raw.default ?? raw;
+      const modules = Array.isArray(exported.commands) ? exported.commands : [exported];
+      for (const mod of modules) {
+        const name = mod.options?.name?.toLowerCase();
+        const aliases = (mod.options?.aliases ?? []).map((alias: string) => alias.toLowerCase());
+        if (name === requested || aliases.includes(requested)) {
+          targetPath = file;
+          targetName = name;
+          break;
+        }
+      }
+      if (targetPath) break;
     }
+
+    if (!targetPath) return { output: `Command not found in compiled commands: \`${requested}\``, success: false };
+
+    const fresh = await import(`${pathToFileURL(targetPath).href}?reload=${Date.now()}`);
+    const exported = fresh.default ?? fresh;
+    const modules = Array.isArray(exported.commands) ? exported.commands : [exported];
+    const mod = modules.find((candidate: any) => candidate.options?.name?.toLowerCase() === targetName);
+    if (!mod) return { output: `\`${targetName}\` was not exported by its command module after reload.`, success: false };
+    if (typeof mod.prefixExecute !== 'function') {
+      return { output: `\`${targetName}\` has no prefix handler.`, success: false };
+    }
+
+    client.commands.set(targetName, mod);
+    for (const [alias, commandName] of client.aliases) {
+      if (commandName === targetName) client.aliases.delete(alias);
+    }
+    for (const alias of mod.options?.aliases ?? []) {
+      client.aliases.set(alias.toLowerCase(), targetName);
+    }
+
+    return {
+      output: `Reloaded prefix command \`${targetName}\` from \`${relative(WORKSPACE_ROOT, targetPath)}\`.`,
+      success: true,
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { output: `Could not reload \`${requested}\`: ${message}`, success: false };
   }
-
-  if (!targetPath) return `Command not found: \`${requested}\``;
-
-  const fresh = await import(`${pathToFileURL(targetPath).href}?reload=${Date.now()}`);
-  const mod = fresh.default ?? fresh;
-  if (typeof mod.prefixExecute !== 'function') return `\`${targetName}\` has no prefix handler.`;
-
-  client.commands.set(targetName, mod);
-  for (const [alias, commandName] of client.aliases) {
-    if (commandName === targetName) client.aliases.delete(alias);
-  }
-  for (const alias of mod.options?.aliases ?? []) {
-    client.aliases.set(alias.toLowerCase(), targetName);
-  }
-
-  return `Reloaded prefix command \`${targetName}\` from \`${relative(WORKSPACE_ROOT, targetPath)}\`.`;
 }

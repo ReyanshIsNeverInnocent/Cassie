@@ -4,6 +4,11 @@ import { resolveWsPing } from '../utils/wsPing.js';
 const PUBLISH_INTERVAL_MS = 30_000;
 const COMMANDS_REFRESH_MS = 30_000;
 const AGGREGATION_TIMEOUT_MS = 20_000;
+let websiteStatsPublisherRunning = false;
+
+export function isWebsiteStatsPublisherRunning(): boolean {
+  return websiteStatsPublisherRunning;
+}
 
 interface ClusterTotals {
   servers: number;
@@ -121,5 +126,6 @@ export function startWebsiteStatsPublisher(client: CassieClient): void {
   void publish();
   const timer = setInterval(() => void publish(), PUBLISH_INTERVAL_MS);
   timer.unref?.();
+  websiteStatsPublisherRunning = true;
   console.log(`[WEB STATS] Supabase publisher started on cluster ${clusterId} (30 sec interval).`);
 }

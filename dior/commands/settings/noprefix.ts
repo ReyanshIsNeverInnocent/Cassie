@@ -3,7 +3,7 @@
 // Lets users (and developers) toggle their own noprefix access on or off.
 // Regular users: gated to those with a valid, non-expired noprefix DB entry.
 // Developers: permanent access by default; self-disable stored separately so
-//             they don't appear in the $glnoprefix list.
+//             they don't appear in the $globalnoprefix list.
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { sendError, sendInfo, sendSuccess } from '../../components/statusMessages.js';
 import {
@@ -113,7 +113,7 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
 
   // ── Developer path ───────────────────────────────────────────────────────────
   // Devs have permanent noprefix by default; self-disable stored in a separate
-  // settings doc so they don't pollute the $glnoprefix list.
+  // settings doc so they don't pollute the $globalnoprefix list.
   if (isDeveloper) {
     const devDisabled = await client.db.isDevNoprefixSelfDisabled(message.author.id, message.guild.id).catch((): boolean => false);
 

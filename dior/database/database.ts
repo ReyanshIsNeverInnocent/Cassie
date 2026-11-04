@@ -651,6 +651,27 @@ export class Database {
     }
   }
 
+  async getDeveloperDiagnostics(): Promise<{
+    pingMs: number;
+    commandsExecuted: number;
+    noPrefixGrants: number;
+    blacklistedUsers: number;
+    blacklistedServers: number;
+  }> {
+    if (!(await this.connect())) throw new Error('Could not connect to PostgreSQL.');
+
+    const [pingMs, commandsExecuted, noPrefixGrants, blacklistedUsers, blacklistedServers] = await Promise.all([
+      this.ping(),
+      this.getGlobalCommandsExecuted(),
+      this.col('noprefix_users').countDocuments({}),
+      this.col('blacklist_users').countDocuments({}),
+      this.col('blacklist_servers').countDocuments({}),
+    ]);
+
+    if (pingMs === null) throw new Error('PostgreSQL did not respond to the health check.');
+    return { pingMs, commandsExecuted, noPrefixGrants, blacklistedUsers, blacklistedServers };
+  }
+
   // ── Cluster ID ────────────────────────────────────────────────────────────
 
   async getOrCreateClusterId(): Promise<number> {

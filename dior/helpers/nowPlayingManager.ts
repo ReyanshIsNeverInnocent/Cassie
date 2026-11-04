@@ -26,6 +26,10 @@ const updateIntervals = new Map<string, ReturnType<typeof setInterval>>();
 
 const NP_UPDATE_INTERVAL_MS = 10_000; // 10 seconds
 
+export function getActiveNowPlayingUpdateCount(): number {
+  return updateIntervals.size;
+}
+
 function getState(guildId: string): PlayerState {
   if (!playerStates.has(guildId)) playerStates.set(guildId, {});
   return playerStates.get(guildId)!;

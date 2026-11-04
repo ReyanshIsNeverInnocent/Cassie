@@ -24,7 +24,7 @@ export const options = {
   aliases:     ['vr', 'vanityroles'] as string[],
   description: 'Configure automatic roles for status keyword or server tag triggers.',
   usage:       'vanityrole\nvanityrole status\nvanityrole bio\nvanityrole tag',
-  category:    'utility',
+  category:    'features',
   owner:       false,
   cooldown:    3,
 };

@@ -11,6 +11,11 @@ export const MAX_GIVEAWAY_DURATION_MS = 365 * 24 * 60 * 60 * 1000;
 export const MAX_GIVEAWAY_WINNERS = 20;
 const SCHEDULER_INTERVAL_MS = 15_000;
 const END_CLAIM_LEASE_MS = 2 * 60_000;
+let giveawaySchedulerRunning = false;
+
+export function isGiveawaySchedulerRunning(): boolean {
+  return giveawaySchedulerRunning;
+}
 
 async function getGiveawayServerIcon(client: CassieClient, guildId: string): Promise<string | null> {
   const guild = client.guilds.cache.get(guildId)
@@ -227,4 +232,5 @@ export async function initializeGiveawayScheduler(client: CassieClient): Promise
 
   await check();
   setInterval(() => { void check(); }, SCHEDULER_INTERVAL_MS);
+  giveawaySchedulerRunning = true;
 }

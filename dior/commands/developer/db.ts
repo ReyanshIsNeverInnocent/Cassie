@@ -1,44 +1,36 @@
+import { buildDeveloperPanel } from '../../components/developer/devToolkit.js';
 import type { CassieClient } from '../../structures/CassieClient.js';
-import { buildDeveloperOutput } from '../../components/developer/devToolkit.js';
 
 export const options = {
   name: 'db',
-  aliases: ['database'],
-  description: 'Run safe, read-only project database diagnostics.',
-  usage: 'db <status|media|restrictions|prefix> [guild-id]',
+  aliases: ['db-stats'] as string[],
+  description: 'Show read-only database connectivity and aggregate diagnostics.',
+  usage: 'db',
   category: 'developer',
   owner: true,
   cooldown: 0,
 };
 
-export async function prefixExecute(message: any, args: string[], client: CassieClient) {
-  if (!client.db) return message.channel.send(buildDeveloperOutput('Database', 'Database is not initialized.', false));
-
-  const action = args[0]?.toLowerCase() ?? 'status';
-  const guildId = args[1] ?? message.guild?.id;
+export async function prefixExecute(message: any, _args: string[], client: CassieClient) {
+  if (!client.db) {
+    return message.channel.send(buildDeveloperPanel('Database diagnostics', [
+      { heading: 'Database', body: 'Not initialized in this process.' },
+    ], false));
+  }
 
   try {
-    if (action === 'status') {
-      await client.db.connect();
-      return message.channel.send(buildDeveloperOutput('Database', 'Database connection is healthy.'));
-    }
-    if (!guildId) {
-      return message.channel.send(buildDeveloperOutput('Database', 'This action needs a guild ID or a guild context.', false));
-    }
-    if (action === 'media') {
-      const channels = await client.db.getMediaChannels(guildId);
-      return message.channel.send(buildDeveloperOutput('Database: media', `Guild: ${guildId}\n${channels.join('\n') || '(none)'}`));
-    }
-    if (action === 'restrictions') {
-      const restrictions = await client.db.getAllMemberRestrictions(guildId);
-      return message.channel.send(buildDeveloperOutput('Database: restrictions', JSON.stringify(restrictions, null, 2) || '[]'));
-    }
-    if (action === 'prefix') {
-      const prefix = await client.db.getGuildPrefix(guildId);
-      return message.channel.send(buildDeveloperOutput('Database: prefix', `Guild: ${guildId}\nPrefix: ${prefix ?? '(default)'}`));
-    }
-    return message.channel.send(buildDeveloperOutput('Database', 'Allowed actions: `status`, `media`, `restrictions`, `prefix`.', false));
-  } catch (error: any) {
-    return message.channel.send(buildDeveloperOutput('Database failed', error?.stack ?? String(error), false));
+    const diagnostics = await client.db.getDeveloperDiagnostics();
+    return message.channel.send(buildDeveloperPanel('Database diagnostics · read only', [
+      { heading: 'PostgreSQL', body: `Connected · ${diagnostics.pingMs} ms` },
+      { heading: 'Global commands executed', body: diagnostics.commandsExecuted.toLocaleString() },
+      { heading: 'No-prefix grants', body: diagnostics.noPrefixGrants.toLocaleString() },
+      { heading: 'Blacklisted users', body: diagnostics.blacklistedUsers.toLocaleString() },
+      { heading: 'Blacklisted servers', body: diagnostics.blacklistedServers.toLocaleString() },
+    ]));
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return message.channel.send(buildDeveloperPanel('Database diagnostics', [
+      { heading: 'Query failed', body: detail },
+    ], false));
   }
 }

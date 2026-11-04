@@ -1,4 +1,4 @@
-// xoxo/commands/developer/noprefix.ts
+// xoxo/commands/developer/globalnoprefix.ts
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { sendError, sendInfo, sendSuccess } from '../../components/statusMessages.js';
 import { sendWrongUsage } from '../../components/wrongUsage.js';
@@ -8,17 +8,21 @@ import { escapeMarkdown } from '../../utils/formatting.js';
 import { sendNoprefixStatus } from '../settings/noprefix.js';
 
 export const options = {
-  name: 'glnoprefix',
-  aliases: ['gnop'] as string[],
+  name: 'globalnoprefix',
+  aliases: ['gnop', 'gnoprefix'] as string[],
   description: 'Manage no-prefix access.',
-  usage: `noprefix add <user> [duration]   — e.g. 30m 2h 7d 1mo 1y (omit for permanent)
-  noprefix remove <user>
-  noprefix extend <user> <duration>
-  noprefix makeperm <user>
-  noprefix list
-  noprefix status <user>
-  noprefix enable / disable
-  noprefix server enable/disable/list [server id]`,
+  usage: `globalnoprefix add <user> [duration] - e.g. 30m 2h 7d 1mo 1y (omit for permanent)
+  globalnoprefix remove <user>
+  globalnoprefix extend <user> <duration>
+  globalnoprefix makeperm <user>
+  globalnoprefix list
+  globalnoprefix status <user>
+  globalnoprefix user <user> enable
+  globalnoprefix user <user> disable
+  globalnoprefix user <user> server enable
+  globalnoprefix user <user> server disable
+  globalnoprefix enable / disable
+  globalnoprefix server enable/disable/list [server id]`,
   category: 'developer',
   owner: true,
   cooldown: 0,
@@ -105,8 +109,8 @@ async function handleList(message: any, client: CassieClient) {
     const exp  = entry.expiresAt
       ? (entry.expiresAt.getTime() < now
           ? `~~${tag}~~ (expired)`
-          : `${tag} — expires <t:${Math.floor(entry.expiresAt.getTime() / 1000)}:R>`)
-      : `${tag} — Permanent`;
+          : `${tag} - expires <t:${Math.floor(entry.expiresAt.getTime() / 1000)}:R>`)
+      : `${tag} - Permanent`;
     return exp;
   }));
   await message.channel.send(
@@ -159,6 +163,40 @@ async function handleServer(message: any, args: string[], client: CassieClient) 
   return sendSuccess({ message }, `Noprefix has been disabled in **${label}**.`);
 }
 
+async function handleUser(message: any, args: string[], client: CassieClient) {
+  if (args.length !== 3 && args.length !== 4) {
+    return sendWrongUsage({ message, client }, options.name, options.usage);
+  }
+
+  const target = await resolveUser(client, message.guild, args[1] ?? '');
+  if (!target) return sendError({ message }, 'Please provide a valid user ID, mention, or username.');
+
+  const scope = args.length === 4 ? args[2]?.toLowerCase() : 'global';
+  const action = args.length === 4 ? args[3]?.toLowerCase() : args[2]?.toLowerCase();
+  if ((scope !== 'global' && scope !== 'server') || !['enable', 'disable'].includes(action)) {
+    return sendWrongUsage({ message, client }, options.name, options.usage);
+  }
+
+  const entry = await client.db.getNoPrefixUserEntry(target.id);
+  if (!entry) return sendError({ message }, `<@${target.id}> does not have noprefix access.`);
+  if (entry.expiresAt && entry.expiresAt.getTime() <= Date.now()) {
+    return sendError({ message }, `<@${target.id}>'s noprefix access has expired.`);
+  }
+
+  const disabled = action === 'disable';
+  if (scope === 'global') {
+    await client.db.setNoPrefixUserDisabled(target.id, disabled);
+  } else {
+    await client.db.setSelfNoPrefixDisabled(target.id, message.guild.id, disabled);
+  }
+
+  const scopeLabel = scope === 'global' ? 'globally' : `in **${escapeMarkdown(message.guild.name)}**`;
+  return sendSuccess(
+    { message },
+    `Noprefix has been **${disabled ? 'disabled' : 'enabled'}** for <@${target.id}> ${scopeLabel}.`,
+  );
+}
+
 // ── Main execute ──────────────────────────────────────────────────────────────
 
 export async function prefixExecute(message: any, args: string[], client: CassieClient) {
@@ -173,13 +211,15 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
     return sendNoprefixStatus(message, client, isDeveloper, target.id, target);
   }
 
+  if (action === 'user') return handleUser(message, args, client);
+
   // ── add ────────────────────────────────────────────────────────────────────
   if (action === 'add') {
     if (args.length < 2 || args.length > 3) return sendWrongUsage({ message, client }, options.name, options.usage);
     const userId = await resolveTargetUserId(message, args, client);
     if (!userId) return sendError({ message }, 'Please provide a valid user ID, mention, or username.');
 
-    // Optional duration — args[2] (args[1] is the user)
+    // Optional duration, args[2] (args[1] is the user)
     let expiresAt: Date | null = null;
     const rawDur = args[2];
     if (rawDur) {
@@ -197,7 +237,7 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
     if (alreadyAdded) {
       // Update expiry only
       await client.db.addNoPrefixUser(userId, message.author.id, expiresAt);
-      return sendSuccess({ message }, `<@${userId}> already had noprefix — expiry updated to ${formatExpiry(expiresAt)}.`);
+      return sendSuccess({ message }, `<@${userId}> already had noprefix - expiry updated to ${formatExpiry(expiresAt)}.`);
     }
     await client.db.addNoPrefixUser(userId, message.author.id, expiresAt);
     return sendSuccess({ message }, `Noprefix access added for <@${userId}>.\nExpires: ${formatExpiry(expiresAt)}`);

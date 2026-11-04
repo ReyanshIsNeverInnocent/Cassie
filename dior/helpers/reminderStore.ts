@@ -15,6 +15,10 @@ export interface Reminder {
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
+export function getScheduledReminderCount(): number {
+  return timers.size;
+}
+
 function fromDoc(doc: ReminderDoc): Reminder {
   return { id: doc.id, userId: doc.user_id, channelId: doc.channel_id, reason: doc.reason, remindAt: doc.remind_at, createdAt: doc.created_at };
 }

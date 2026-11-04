@@ -15,7 +15,7 @@ export const options = {
 autonick [member | bot] append <text>
 autonick reset [member | bot | all] [prepend | append | all]
 autonick status`,
-  category: 'settings',
+  category: 'features',
   owner: false,
   cooldown: 5,
 };

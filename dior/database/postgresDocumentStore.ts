@@ -269,7 +269,14 @@ export class PostgresCollection<T extends DocumentValue> {
     return docs[0] ?? null;
   }
 
-  async countDocuments(filter: DocumentValue = {}): Promise<number> { return (await this.read(filter)).length; }
+  async countDocuments(filter: DocumentValue = {}): Promise<number> {
+    if (Object.keys(filter).length > 0) return (await this.read(filter)).length;
+    const result = await this.store.query<{ count: string }[]>(
+      'SELECT COUNT(*)::text AS count FROM bot_documents WHERE bot_id = $1 AND collection_name = $2',
+      [this.botId, this.name],
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  }
 
   async distinct(key: string): Promise<any[]> {
     const docs = await this.read({});

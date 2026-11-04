@@ -30,11 +30,11 @@ import { emojis } from '../../emojis.js';
 
 export const options = {
   name: 'host-image',
-  aliases: ['hostimage', 'imgbb', 'upload-image'] as string[],
+  aliases: ['hostimage', 'imgbb'] as string[],
   description: 'Upload an image to imgbb and get its hosted links.',
   usage: `host-image <image attachment>
   host-image <image URL>`,
-  category: 'utility',
+  category: 'features',
   owner: false,
   cooldown: 8,
 };

@@ -4,8 +4,7 @@ import { rawCommandInput, readSource } from '../../helpers/devToolkit.js';
 
 export const options = {
   name: 'source',
-  aliases: ['src'],
-  description: 'View a workspace source file without exposing environment files.',
+  description: 'Read a workspace source file, excluding secrets and build output.',
   usage: 'source <workspace-relative-file>',
   category: 'developer',
   owner: true,
@@ -13,5 +12,6 @@ export const options = {
 };
 
 export async function prefixExecute(message: any, args: string[], _client: CassieClient) {
-  return message.channel.send(buildDeveloperOutput('Source', readSource(rawCommandInput(message, args))));
+  const result = readSource(rawCommandInput(message, args));
+  return message.channel.send(buildDeveloperOutput('Source viewer', result.output, result.success));
 }

@@ -24,12 +24,16 @@ const guildCache = new Map<string, { expiresAt: number; docs: AutoresponderDoc[]
 let globalCache: { expiresAt: number; docs: AutoresponderDoc[] } | null = null;
 
 // Periodic sweep so the cooldown map doesn't grow unbounded on busy bots.
-setInterval(() => {
+const cooldownSweepTimer = setInterval(() => {
   const cutoff = Date.now() - COOLDOWN_MS * 4;
   for (const [key, ts] of lastFired) {
     if (ts < cutoff) lastFired.delete(key);
   }
 }, 60_000);
+
+export function isAutoresponderCooldownSweepRunning(): boolean {
+  return Boolean(cooldownSweepTimer);
+}
 
 async function fireResponses(message: any, doc: AutoresponderDoc): Promise<void> {
   const cooldownKey = `${message.guild.id}:${message.channelId}:${doc.trigger_lower}`;

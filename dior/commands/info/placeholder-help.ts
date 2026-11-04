@@ -15,10 +15,10 @@ import {
 
 export const options = {
   name: 'placeholder-help',
-  aliases: ['placeholders', 'ph', 'phhelp'] as string[],
+  aliases: ['placeholders'] as string[],
   description: 'Show all supported placeholder tokens with descriptions.',
   usage: 'placeholder-help',
-  category: 'utility',
+  category: 'info',
   owner: false,
   cooldown: 3,
 };

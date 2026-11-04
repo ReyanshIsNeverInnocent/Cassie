@@ -1,22 +1,33 @@
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { buildDeveloperOutput } from '../../components/developer/devToolkit.js';
-import { evaluateCode, rawCommandInput } from '../../helpers/devToolkit.js';
+import { evaluateCode, limitOutput, rawCommandInput } from '../../helpers/devToolkit.js';
 
 export const options = {
   name: 'eval',
-  aliases: ['e'],
-  description: 'Evaluate JavaScript in a time-limited context.',
-  usage: 'eval <javascript>',
+  aliases: ['e'] as string[],
+  description: 'Evaluate a JavaScript expression or async snippet.',
+  usage: `eval <expression>
+  eval <JavaScript statements>`,
   category: 'developer',
   owner: true,
   cooldown: 0,
 };
 
 export async function prefixExecute(message: any, args: string[], client: CassieClient) {
+  const code = rawCommandInput(message, args);
+  if (!code) {
+    return message.channel.send(
+      buildDeveloperOutput('Evaluation usage', 'Provide JavaScript code: `eval <expression or statements>`.', false),
+    );
+  }
+
   try {
-    const output = await evaluateCode(message, rawCommandInput(message, args), args, client);
-    return message.channel.send(buildDeveloperOutput('Eval', output));
-  } catch (error: any) {
-    return message.channel.send(buildDeveloperOutput('Eval failed', error?.stack ?? String(error), false));
+    const output = await evaluateCode(message, code, args, client);
+    return message.channel.send(buildDeveloperOutput('Evaluation complete', output));
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.stack ?? error.message : String(error);
+    return message.channel.send(
+      buildDeveloperOutput('Evaluation failed', limitOutput(detail), false),
+    );
   }
 }
