@@ -2,7 +2,7 @@
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { sendSuccess, sendError } from '../../components/statusMessages.js';
 import { disableNowPlayingButtons, clearPlayerState } from '../../helpers/nowPlayingManager.js';
-import { scheduleRejoin } from '../../helpers/twentyFourSeven.js';
+import { removeIdleVoiceConnection, scheduleRejoin } from '../../helpers/twentyFourSeven.js';
 
 export const options = {
   name: 'leave',
@@ -21,13 +21,17 @@ export const options = {
 
 async function handle(ctx: any, client: CassieClient, guildId: string) {
   const player: any = client.kazagumo.players.get(guildId);
-  if (!player) return sendError(ctx, 'I am not in any voice channel.');
+  const guild = client.guilds.cache.get(guildId);
+  const channelId: string | null = player?.voiceId ?? guild?.members?.me?.voice?.channelId ?? null;
+  if (!channelId) return sendError(ctx, 'I am not in any voice channel.');
 
-  const channelId: string = player.voiceId;
-
-  await disableNowPlayingButtons(client, player).catch((): null => null);
-  await player.destroy().catch((): null => null);
-  clearPlayerState(guildId);
+  if (player) {
+    await disableNowPlayingButtons(client, player).catch((): null => null);
+    await player.destroy().catch((): null => null);
+    clearPlayerState(guildId);
+  } else {
+    removeIdleVoiceConnection(guildId);
+  }
 
   // If 24/7 mode is enabled, schedule a rejoin so the bot comes back.
   const settings = await (client as any).db?.get24Seven?.(guildId).catch((): null => null);

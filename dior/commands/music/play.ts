@@ -10,6 +10,7 @@ import { extractThumbnail, formatDuration } from '../../utils/formatting.js';
 import { unifiedSearch } from '../../helpers/sourceSearch.js';
 import { updateNowPlayingMessage } from '../../helpers/nowPlayingManager.js';
 import { addTracks } from '../../helpers/sessionQueue.js';
+import { join247Voice, releaseIdleVoiceForMusic } from '../../helpers/twentyFourSeven.js';
 
 export const options = {
   name: 'play',
@@ -66,6 +67,7 @@ async function handle(
   }
 
   let player: any;
+  releaseIdleVoiceForMusic(guild.id, voiceChannel.id);
   try {
     player = await (client as any).kazagumo.createPlayer({
       guildId: guild.id,
@@ -75,6 +77,14 @@ async function handle(
       volume:  100,
     });
   } catch (err: any) {
+    const saved247 = await client.db?.get24Seven(guild.id).catch((): null => null);
+    if (saved247?.enabled) {
+      try {
+        await join247Voice(client, guild, saved247.channelId);
+      } catch (restoreError) {
+        console.error(`[24-7] Could not restore voice after music connection failed in ${guild.name}: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`);
+      }
+    }
     return sendError(errCtx, `Could not connect to your voice channel: ${err?.message ?? 'unknown error'}`);
   }
 

@@ -2,7 +2,7 @@
 import { ChannelType } from 'discord.js';
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { sendError, sendSuccess, sendInfo } from '../../components/statusMessages.js';
-import { scheduleRejoin, clearRejoin } from '../../helpers/twentyFourSeven.js';
+import { join247Voice, clearRejoin, removeIdleVoiceConnection } from '../../helpers/twentyFourSeven.js';
 
 export const options = {
   name: '24/7',
@@ -76,18 +76,29 @@ async function handleEnable(
     targetChannel = botVoice;
   }
 
-  // Check permissions up front — a bad Connect/Speak grant otherwise saves
+  // Check permissions up front — a bad Connect grant otherwise saves
   // fine to the DB but the bot then silently fails to actually be there,
   // and every future rejoin attempt (boot, disconnect, queue-end) fails too.
   const botMember = guild.members.me;
   const perms = botMember ? targetChannel.permissionsFor(botMember) : null;
-  if (!perms?.has('Connect') || !perms?.has('Speak')) {
-    return sendError(ctxObj, `I don't have permission to join or speak in <#${targetChannel.id}>. Please grant Connect and Speak first.`);
+  if (!perms?.has('Connect')) {
+    return sendError(ctxObj, `I don't have permission to join <#${targetChannel.id}>. Please grant Connect first.`);
   }
 
   // If already enabled in the same channel, skip.
   const current = await client.db?.get24Seven(guild.id).catch((): null => null);
   if (current?.enabled && current.channelId === targetChannel.id) {
+    const player = client.kazagumo.players.get(guild.id) as any;
+    if (!player || (!player.playing && !player.paused)) {
+      try {
+        await join247Voice(client, guild, targetChannel.id);
+      } catch (error) {
+        return sendError(
+          ctxObj,
+          `Could not connect to <#${targetChannel.id}>: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
     return sendInfo(ctxObj, `24/7 is already enabled in <#${targetChannel.id}>. No changes made.`);
   }
 
@@ -100,26 +111,21 @@ async function handleEnable(
   const textId = getTextChannelId(ctx, guild);
   const player = client.kazagumo.players.get(guild.id) as any;
 
-  if (!player) {
-    // Bot is not in any VC — join now.
-    await client.kazagumo.createPlayer({
-      guildId: guild.id,
-      voiceId: targetChannel.id,
-      textId,
-      deaf: true,
-    }).catch((): null => null);
-  } else if (player.voiceId !== targetChannel.id) {
-    // Bot is in a different VC — move the existing voice connection instead
-    // of destroying the player. scheduleRejoin(..., 0) used to be called
-    // here, which hard-destroys the player first — killing any in-progress
-    // playback/queue just because someone locked 24/7 to a new channel.
-    try {
+  if (player && (player.playing || player.paused)) {
+    // Keep an active music player intact; idle players are replaced by an
+    // audio-less voice connection in join247Voice().
+    if (player.voiceId !== targetChannel.id) {
       player.setVoiceChannel(targetChannel.id);
       player.textId = textId;
-    } catch {
-      // Fallback for a Kazagumo version without setVoiceChannel — still
-      // correct, just loses the current queue like the old behaviour.
-      scheduleRejoin(client, guild.id, targetChannel.id, 0);
+    }
+  } else {
+    try {
+      await join247Voice(client, guild, targetChannel.id);
+    } catch (error) {
+      return sendError(
+        ctxObj,
+        `Could not connect to <#${targetChannel.id}>: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
   // If already in targetChannel, nothing to do — bot stays.
@@ -141,6 +147,7 @@ async function handleDisable(
 
   clearRejoin(guild.id);
   await client.db?.clear24Seven(guild.id);
+  if (!client.kazagumo.players.get(guild.id)) removeIdleVoiceConnection(guild.id);
 
   return sendSuccess(ctxObj, '24/7 mode has been disabled. The bot will leave normally when the queue ends.');
 }

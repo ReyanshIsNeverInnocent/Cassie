@@ -15,7 +15,7 @@
 //       - "presence" → an activity ("Listening to ...", "Watching ...", etc.)
 //       - "status"   → a Custom Status ("emoji + text" on the user popup)
 //
-//   • `statusEntries`   — list used when mode === "status".   Each is { text }.
+//   • `statusEntries`   — list used when mode === "status". Each is { text }.
 //   • `presenceEntries` — list used when mode === "presence". Each is
 //     { activityType, text, streamUrl? }. `streamUrl` is required when
 //     `activityType === "Streaming"` (must be a valid Twitch URL).
@@ -105,14 +105,14 @@ export const botInstances: BotInstance[] = [
     statusRotation: "multi",
     statusEntries: [
       { text: "In God We Trust." },
-      { text: "💗 feeling cute" },
       { text: "✨ When the sun goes down, and the moon comes up!" },
       { text: "Screwing with {users} people." },
       { text: "Devil is a lie." },
-      { text: "\"Thirty four, thirty fiveeee\" ~Ariana Grande" },
+      { text: "SHE'S WORKING IN THE PYRAMIDS AT NIGHT" },
       { text: "Dear Lord, when I get to Heaven, Please, LET ME BRING MY MAN!" },
       { text: "Goddamn bitch, I am not a Teen Choice."},
-      { text: " XOXO "},
+      { text: "welcome to the HOTEL CALIFORNIA"},
+      { text: " xoxo "},
     ],
   },
   {

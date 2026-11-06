@@ -2,6 +2,7 @@
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { sendSuccess, sendError } from '../../components/statusMessages.js';
 import { clearPlayerState } from '../../helpers/nowPlayingManager.js';
+import { reconnect247Voice } from '../../helpers/twentyFourSeven.js';
 
 export const options = {
   name: 'rejoin',
@@ -26,6 +27,16 @@ async function handle(
 ) {
   const player: any = client.kazagumo.players.get(guild.id);
   if (!player) {
+    const settings = await client.db?.get24Seven(guild.id).catch((): null => null);
+    if (settings?.enabled) {
+      try {
+        await reconnect247Voice(client, guild, settings.channelId);
+      } catch (error) {
+        return sendError(ctx, `Could not reconnect to <#${settings.channelId}>: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      return sendSuccess(ctx, `Rejoined <#${settings.channelId}>.`);
+    }
+
     const guildPrefix: string =
       (await (client as any).helpers?.getGuildPrefix?.(guild.id).catch((): null => null)) ??
       (client as any).config?.prefix ??

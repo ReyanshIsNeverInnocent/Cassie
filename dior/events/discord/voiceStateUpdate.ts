@@ -8,7 +8,13 @@
 
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { dispatchLog } from '../../helpers/logDispatcher.js';
-import { scheduleRejoin, clearRejoin } from '../../helpers/twentyFourSeven.js';
+import {
+  complete247VoiceTransition,
+  is247VoiceTransitioning,
+  removeIdleVoiceConnection,
+  scheduleRejoin,
+  clearRejoin,
+} from '../../helpers/twentyFourSeven.js';
 import {
   buildVoiceJoinPayload,
   buildVoiceLeavePayload,
@@ -41,7 +47,9 @@ export async function execute(oldState: any, newState: any, client: CassieClient
 
   // ── 24/7 bot reconnect logic ─────────────────────────────────────────────
   // Fires when the bot itself is disconnected OR moved to a different VC.
-  if (member.id === client.user?.id && oldState.channelId && oldState.channelId !== newState.channelId) {
+  if (member.id === client.user?.id && is247VoiceTransitioning(guild.id)) {
+    if (newState.channelId) complete247VoiceTransition(guild.id, newState.channelId);
+  } else if (member.id === client.user?.id && oldState.channelId && oldState.channelId !== newState.channelId) {
     const is247 = await (client as any).db?.get24Seven?.(guild.id).catch((): null => null);
 
     if (!newState.channelId) {
@@ -52,6 +60,7 @@ export async function execute(oldState: any, newState: any, client: CassieClient
       // schedule.
       const player = client.kazagumo?.players?.get(guild.id);
       if (player) await player.destroy().catch((): null => null);
+      removeIdleVoiceConnection(guild.id);
 
       if (is247?.enabled) {
         scheduleRejoin(client, guild.id, is247.channelId, 2000);

@@ -2,6 +2,7 @@
 import { ChannelType } from 'discord.js';
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { sendSuccess, sendError } from '../../components/statusMessages.js';
+import { join247Voice, releaseIdleVoiceForMusic } from '../../helpers/twentyFourSeven.js';
 
 export const options = {
   name: 'join',
@@ -56,12 +57,23 @@ async function handle(
       try { player.setVoiceChannel(targetChannel.id); } catch { /* ignore */ }
     }
   } else {
-    player = await client.kazagumo.createPlayer({
-      guildId: guild.id,
-      voiceId: targetChannel.id,
-      textId: textChannelId,
-      deaf: true,
-    }).catch((): null => null);
+    releaseIdleVoiceForMusic(guild.id, targetChannel.id);
+    try {
+      player = await client.kazagumo.createPlayer({
+        guildId: guild.id,
+        voiceId: targetChannel.id,
+        textId: textChannelId,
+        deaf: true,
+      });
+    } catch (error) {
+      const saved247 = await client.db?.get24Seven(guild.id).catch((): null => null);
+      if (saved247?.enabled) {
+        await join247Voice(client, guild, saved247.channelId).catch((restoreError: unknown) => {
+          console.error(`[24-7] Could not restore voice after join failed in ${guild.name}: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`);
+        });
+      }
+      return sendError(ctx, `Could not connect to <#${targetChannel.id}>: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   return sendSuccess(ctx, `Joined <#${targetChannel.id}>.`);

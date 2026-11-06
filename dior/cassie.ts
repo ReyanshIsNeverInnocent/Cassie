@@ -35,6 +35,7 @@ import { migrateVoiceMasterSetups } from './helpers/voiceMaster.js';
 import { initializeReminders } from './helpers/reminderStore.js';
 import { initializeGiveawayScheduler } from './helpers/giveawayManager.js';
 import { startWebsiteStatsPublisher } from './helpers/websiteStatsPublisher.js';
+import { reconnectAllOnBoot } from './helpers/twentyFourSeven.js';
 
 // ── Global unhandled-rejection safety net ──────────────────────────────────
 // Certain third-party libraries (Shoukaku/Kazagumo) fire off internal async
@@ -122,6 +123,9 @@ async function bootstrap(): Promise<void> {
 
   // ── Loaders ──────────────────────────────────────────────────────────────────
   await loadAllEvents(client);
+  void reconnectAllOnBoot(client).catch((err: unknown) => {
+    console.error(`[24-7] Boot reconnect pass threw: ${err instanceof Error ? err.message : String(err)}`);
+  });
 
   // Step 2 — now that nodeError.ts is wired up on client.kazagumo.shoukaku,
   // add the Lavalink nodes. Any connection errors will be caught cleanly.

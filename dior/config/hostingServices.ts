@@ -23,4 +23,5 @@ export const hostingServices: HostingServiceEntry[] = [
   { name: 'Nex Cloud', ip: '82.41.64.6' },
   { name: 'Wispbyte', ip: '93.115.101.104' },
   { name: 'Aerox Devs', ip: '82.41.64.185' },
+  { name: 'Nexio Host', ip: '204.10.194.232' },
 ];

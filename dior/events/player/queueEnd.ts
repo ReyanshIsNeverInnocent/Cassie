@@ -3,7 +3,7 @@
 // Args: (player: KazagumoPlayer)
 import { sendInfo } from '../../components/statusMessages.js';
 import { disableNowPlayingButtons, markMessageAsQueueEnd } from '../../helpers/nowPlayingManager.js';
-import { scheduleRejoin } from '../../helpers/twentyFourSeven.js';
+import { join247Voice, scheduleRejoin } from '../../helpers/twentyFourSeven.js';
 
 const REJOIN_DELAY_MS = 2 * 60 * 1000; // 2 minutes
 
@@ -32,7 +32,13 @@ export async function execute(client: any, player: any): Promise<void> {
 
   if (is247?.enabled) {
     if (player.voiceId === is247.channelId) {
-      console.log(`[24-7] Bot staying connected in 24/7 channel in ${guild.name}`);
+      try {
+        await join247Voice(client, guild, is247.channelId);
+        console.log(`[24-7] Bot staying connected in 24/7 channel in ${guild.name}`);
+      } catch (error) {
+        console.error(`[24-7] Could not switch to independent voice in ${guild.name}: ${error instanceof Error ? error.message : String(error)}`);
+        scheduleRejoin(client, player.guildId, is247.channelId, REJOIN_DELAY_MS);
+      }
     } else {
       console.log(`[24-7] Queue ended outside 24/7 channel in ${guild.name} — rejoining in 2 min`);
       scheduleRejoin(client, player.guildId, is247.channelId, REJOIN_DELAY_MS);

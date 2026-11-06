@@ -14,6 +14,8 @@
 // This is intentionally separate from the node event files. The event files
 // only report what Shoukaku observed; this module decides what happens next.
 
+import { reconnectOnNodeOutage } from './twentyFourSeven.js';
+
 interface NodeConfig {
   name: string;
   host: string;
@@ -22,7 +24,8 @@ interface NodeConfig {
   secure: boolean;
 }
 
-const WRAP_AROUND_COOLDOWN_MS = 30_000;
+const INITIAL_RETRY_DELAY_MS = 30_000;
+const MAX_RETRY_DELAY_MS = 30 * 60_000;
 const CONNECTION_ATTEMPT_TIMEOUT_MS = 15_000;
 const FAILURE_WINDOW_MS = 20_000;
 const FAILURE_THRESHOLD = 3;
@@ -38,6 +41,9 @@ let connectionTimer: ReturnType<typeof setTimeout> | null = null;
 let attemptTimeout: ReturnType<typeof setTimeout> | null = null;
 let transitionInProgress = false;
 let recoveryInProgress = new Set<string>();
+let failedCycles = 0;
+let outageAttemptedNodes = new Set<string>();
+let outageVoiceRestored = false;
 
 function toShoukakuOption(node: NodeConfig) {
   return {
@@ -128,7 +134,10 @@ function connectAt(client: any, index: number): void {
   transitionInProgress = false;
 
   removeUnexpectedNodes(client, cfg.name);
-  console.log(`[NODE] 🔌 Attempting "${cfg.name}" (priority ${index + 1}/${priorityList.length})...`);
+  if (!outageAttemptedNodes.has(cfg.name)) {
+    outageAttemptedNodes.add(cfg.name);
+    console.log(`[NODE] 🔌 Attempting "${cfg.name}" (priority ${index + 1}/${priorityList.length})...`);
+  }
 
   try {
     // Shoukaku's addNode() returns void and owns the async connect promise.
@@ -171,6 +180,7 @@ function failover(client: any, nodeName: string | null, reason: string): void {
   const previousIndex = activeIndex;
   abandonNode(client, activeName, activeNode);
   activeNode = null;
+  activeName = null;
   activeReady = false;
 
   const nextIndex = previousIndex < 0
@@ -178,11 +188,29 @@ function failover(client: any, nodeName: string | null, reason: string): void {
     : (previousIndex + 1) % priorityList.length;
   const wrapping = previousIndex >= 0 && nextIndex === 0;
 
-  console.warn(`[NODE] 🔁 ${nodeName ? `"${nodeName}"` : 'Current node'} unavailable (${reason}) — ${wrapping ? 'cycling back to the first node' : `trying "${priorityList[nextIndex]?.name ?? 'next'}"`}.`);
+  if (nodeName && !outageAttemptedNodes.has(`failed:${nodeName}`)) {
+    outageAttemptedNodes.add(`failed:${nodeName}`);
+    console.warn(`[NODE] 🔁 "${nodeName}" unavailable (${reason}) — ${wrapping ? 'cycling back to the first node' : `trying "${priorityList[nextIndex]?.name ?? 'next'}"`}.`);
+  }
 
   if (wrapping) {
-    console.warn(`[NODE] ⏳ All configured Lavalink nodes are down — retrying from the top in ${WRAP_AROUND_COOLDOWN_MS / 1000}s.`);
-    scheduleConnect(client, nextIndex, WRAP_AROUND_COOLDOWN_MS);
+    const retryDelay = Math.min(
+      INITIAL_RETRY_DELAY_MS * (2 ** Math.min(failedCycles, 10)),
+      MAX_RETRY_DELAY_MS,
+    );
+    failedCycles++;
+    const retryMinutes = Math.round(retryDelay / 60_000);
+    const retryText = retryDelay < 60_000 ? `${retryDelay / 1000}s` : `${retryMinutes}m`;
+    console.warn(`[NODE] ⏳ All configured Lavalink nodes are down — retrying in ${retryText}.`);
+
+    if (!outageVoiceRestored) {
+      outageVoiceRestored = true;
+      void reconnectOnNodeOutage(client).catch((error: unknown) => {
+        console.error(`[24-7] Node-outage voice restore failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+
+    scheduleConnect(client, nextIndex, retryDelay);
   } else {
     connectAt(client, nextIndex);
   }
@@ -239,6 +267,9 @@ export function startNodeManager(client: any, nodes: NodeConfig[]): void {
   activeReady = false;
   failureTimestamps = [];
   transitionInProgress = false;
+  failedCycles = 0;
+  outageAttemptedNodes = new Set<string>();
+  outageVoiceRestored = false;
   recoveryInProgress = new Set<string>();
   clearConnectionTimer();
   clearAttemptTimeout();
@@ -257,6 +288,9 @@ export function reportNodeReady(client: any, nodeName: string): void {
   clearAttemptTimeout();
   if (activeReady) return;
   activeReady = true;
+  failedCycles = 0;
+  outageAttemptedNodes.clear();
+  outageVoiceRestored = false;
   void recoverPlayers(client, nodeName);
 }
 

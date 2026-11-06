@@ -1,13 +1,114 @@
 // xoxo/helpers/twentyFourSeven.ts
 // In-memory registry for pending 24/7 rejoin timers (guildId → timeout handle)
 
-const rejoinTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const NODE_WAIT_INTERVAL_MS = 30_000;
+import { entersState, joinVoiceChannel, VoiceConnectionStatus } from '@discordjs/voice';
+import type { VoiceConnection } from '@discordjs/voice';
 
-function hasLiveLavalinkNode(client: any): boolean {
-  const nodes: Map<string, any> | undefined = client?.kazagumo?.shoukaku?.nodes;
-  if (!nodes) return false;
-  return [...nodes.values()].some((node) => node.state === 1);
+const rejoinTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const idleVoiceConnections = new Map<string, VoiceConnection>();
+const voiceTransitions = new Map<string, { channelId: string; timer: ReturnType<typeof setTimeout> }>();
+const VOICE_READY_TIMEOUT_MS = 20_000;
+const TRANSITION_TIMEOUT_MS = 15_000;
+
+function beginVoiceTransition(guildId: string, channelId: string): void {
+  const existing = voiceTransitions.get(guildId);
+  if (existing) clearTimeout(existing.timer);
+
+  const timer = setTimeout(() => voiceTransitions.delete(guildId), TRANSITION_TIMEOUT_MS);
+  voiceTransitions.set(guildId, { channelId, timer });
+}
+
+export function is247VoiceTransitioning(guildId: string): boolean {
+  return voiceTransitions.has(guildId);
+}
+
+export function complete247VoiceTransition(guildId: string, channelId: string): void {
+  const transition = voiceTransitions.get(guildId);
+  if (!transition || transition.channelId !== channelId) return;
+  clearTimeout(transition.timer);
+  voiceTransitions.delete(guildId);
+}
+
+export function releaseIdleVoiceForMusic(guildId: string, channelId: string): void {
+  const connection = idleVoiceConnections.get(guildId);
+  if (!connection) return;
+
+  beginVoiceTransition(guildId, channelId);
+  idleVoiceConnections.delete(guildId);
+  connection.destroy();
+}
+
+export function removeIdleVoiceConnection(guildId: string): void {
+  const connection = idleVoiceConnections.get(guildId);
+  if (!connection) return;
+  idleVoiceConnections.delete(guildId);
+  connection.destroy();
+}
+
+export async function reconnect247Voice(client: any, guild: any, channelId: string): Promise<void> {
+  beginVoiceTransition(guild.id, channelId);
+  removeIdleVoiceConnection(guild.id);
+  await join247Voice(client, guild, channelId);
+}
+
+export async function join247Voice(client: any, guild: any, channelId: string): Promise<void> {
+  let channel = guild.channels?.cache?.get(channelId);
+  if (!channel) channel = await guild.channels?.fetch(channelId);
+  if (!channel?.isVoiceBased?.()) {
+    throw new Error(`Saved channel <${channelId}> no longer exists or isn't a voice channel.`);
+  }
+
+  const member = guild.members?.me ?? (await guild.members?.fetchMe?.());
+  if (!member || !channel.permissionsFor(member)?.has('Connect')) {
+    throw new Error(`Missing Connect permission in <#${channelId}>.`);
+  }
+
+  const existingConnection = idleVoiceConnections.get(guild.id);
+  if (
+    existingConnection &&
+    existingConnection.state.status !== VoiceConnectionStatus.Destroyed &&
+    existingConnection.joinConfig.channelId === channelId
+  ) {
+    try {
+      await entersState(existingConnection, VoiceConnectionStatus.Ready, VOICE_READY_TIMEOUT_MS);
+      return;
+    } catch (error) {
+      idleVoiceConnections.delete(guild.id);
+      existingConnection.destroy();
+      throw error;
+    }
+  }
+
+  beginVoiceTransition(guild.id, channelId);
+  const player = client.kazagumo?.players?.get(guild.id);
+  if (player) await player.destroy();
+
+  if (existingConnection) {
+    idleVoiceConnections.delete(guild.id);
+    existingConnection.destroy();
+  }
+
+  const connection = joinVoiceChannel({
+    channelId,
+    guildId: guild.id,
+    adapterCreator: guild.voiceAdapterCreator,
+    selfDeaf: true,
+  });
+  idleVoiceConnections.set(guild.id, connection);
+  let connectionErrorLogged = false;
+  connection.on('error', (error) => {
+    if (connectionErrorLogged) return;
+    connectionErrorLogged = true;
+    console.error(`[24-7] Voice connection error in ${guild.name}: ${error.message}`);
+  });
+
+  try {
+    await entersState(connection, VoiceConnectionStatus.Ready, VOICE_READY_TIMEOUT_MS);
+  } catch (error) {
+    if (idleVoiceConnections.get(guild.id) === connection) idleVoiceConnections.delete(guild.id);
+    connection.destroy();
+    throw error;
+  }
 }
 
 export function scheduleRejoin(client: any, guildId: string, channelId: string, delayMs: number): void {
@@ -33,55 +134,14 @@ async function performRejoin(client: any, guildId: string, channelId: string, re
   const guild = client.guilds?.cache?.get(guildId);
   if (!guild) return;
 
-  let channel = guild.channels?.cache?.get(channelId);
-  if (!channel) {
-    channel = await guild.channels?.fetch(channelId).catch((): null => null);
-  }
-  if (!channel || !channel.isVoiceBased()) {
-    console.warn(`[24-7] Rejoin aborted in ${guild.name}: channel <${channelId}> no longer exists or isn't a voice channel.`);
-    return;
-  }
-
-  // A node outage is not a guild/player failure. Keep the rejoin pending
-  // until the node manager connects a replacement instead of consuming the
-  // normal three-attempt retry budget with "No node found".
-  if (!hasLiveLavalinkNode(client)) {
-    console.warn(`[24-7] Rejoin deferred for ${guild.name}: no Lavalink node is currently live; checking again in ${NODE_WAIT_INTERVAL_MS / 1000}s.`);
-    const timer = setTimeout(async () => {
-      rejoinTimers.delete(guildId);
-      await performRejoin(client, guildId, channelId, retryCount);
-    }, NODE_WAIT_INTERVAL_MS);
-    rejoinTimers.set(guildId, timer);
-    return;
-  }
-
-  // A voice-connect gateway payload for a channel we lack permission in never
-  // errors — Discord silently drops it and the bot just never appears. Check
-  // permissions up front so failures are logged instead of hanging forever.
-  const me = guild.members?.me ?? (await guild.members?.fetchMe?.().catch((): null => null));
-  const perms = me ? channel.permissionsFor(me) : null;
-  if (!perms?.has('Connect') || !perms?.has('Speak')) {
-    console.warn(`[24-7] Rejoin aborted in ${guild.name}: missing Connect/Speak permission in <#${channelId}>.`);
-    return;
-  }
-
-  const existingPlayer = client.kazagumo?.players?.get(guildId);
-  if (existingPlayer) {
-    await existingPlayer.destroy().catch((): null => null);
-  }
-
   try {
-    await client.kazagumo.createPlayer({
-      guildId,
-      voiceId: channelId,
-      textId: guild.systemChannelId || channelId,
-      deaf: true,
-    });
+    await join247Voice(client, guild, channelId);
+    clearRejoin(guildId);
     console.log(`[24-7] Rejoined 24/7 channel in ${guild.name}`);
   } catch (err) {
-    console.error(`[24-7] Rejoin failed for ${guild.name}: ${(err as Error).message}`);
+    console.error(`[24-7] Rejoin failed for ${guild.name}: ${err instanceof Error ? err.message : String(err)}`);
 
-    // Retry with backoff — Lavalink nodes can take a moment to stabilise.
+    // Retry with backoff while Discord's voice connection stabilises.
     // Cap at 3 retries (delays: 30s → 60s → 120s).
     const MAX_RETRIES = 3;
     if (retryCount < MAX_RETRIES) {
@@ -102,39 +162,20 @@ async function performRejoin(client: any, guildId: string, channelId: string, re
 // Boot-time restore
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// getAllEnabled24Seven() previously had no caller anywhere in the codebase —
-// on every restart/deploy, every guild's 24/7 connection was silently
-// forgotten until someone ran `24/7 enable` again. This restores them once
-// the first Lavalink node comes online (kazagumo.createPlayer needs a
-// connected node to work), and is guarded to run exactly once per process.
+// Restore saved voice connections independently of Lavalink. These
+// audio-less connections keep 24/7 guilds present even during node outages.
 
-let bootReconnectStarted  = false;
-let bootReconnectComplete = false;
+let bootReconnectStarted = false;
 
 export async function reconnectAllOnBoot(client: any): Promise<void> {
   if (bootReconnectStarted) return;
   bootReconnectStarted = true;
 
   await _doReconnectAll(client, 'boot');
-  bootReconnectComplete = true;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Mid-session node-recovery restore
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// When the active Lavalink node goes down mid-session, Shoukaku destroys all
-// players but never fires a Discord voiceStateUpdate. The bot stays in VC
-// from Discord's perspective but loses its Lavalink player. Once the node
-// manager connects a new node, this is called to restore every 24/7
-// connection that this cluster owns — without the once-per-process guard.
-//
-// Skipped on the very first node-ready event because reconnectAllOnBoot()
-// runs at the same time and would race to create the same players.
-
-export async function reconnectAfterNodeRecover(client: any): Promise<void> {
-  if (!bootReconnectComplete) return; // boot pass hasn't finished yet — skip
-  await _doReconnectAll(client, 'node-recover');
+export async function reconnectOnNodeOutage(client: any): Promise<void> {
+  await _doReconnectAll(client, 'node-outage');
 }
 
 async function _doReconnectAll(client: any, reason: string): Promise<void> {
@@ -157,39 +198,15 @@ async function _doReconnectAll(client: any, reason: string): Promise<void> {
     const guild = client.guilds?.cache?.get(guildId);
     if (!guild) continue;
 
-    // Already has a live player — leave it alone.
-    if (client.kazagumo?.players?.get(guildId)) continue;
-
     // Clear any pending rejoin timer so there's no race with this reconnect.
     clearRejoin(guildId);
 
-    let channel = guild.channels?.cache?.get(channelId);
-    if (!channel) {
-      channel = await guild.channels.fetch(channelId).catch((): null => null);
-    }
-    if (!channel || !channel.isVoiceBased?.()) {
-      console.warn(`[24-7] [${reason}] Skipping ${guild.name}: saved channel <${channelId}> no longer exists.`);
-      continue;
-    }
-
-    const me = guild.members?.me ?? (await guild.members?.fetchMe?.().catch((): null => null));
-    const perms = me ? channel.permissionsFor(me) : null;
-    if (!perms?.has('Connect') || !perms?.has('Speak')) {
-      console.warn(`[24-7] [${reason}] Skipping ${guild.name}: missing Connect/Speak permission in <#${channelId}>.`);
-      continue;
-    }
-
     try {
-      await client.kazagumo.createPlayer({
-        guildId,
-        voiceId: channelId,
-        textId: guild.systemChannelId || channelId,
-        deaf: true,
-      });
+      await join247Voice(client, guild, channelId);
       restored++;
-      console.log(`[24-7] [${reason}] Restored connection in ${guild.name} (#${channel.name})`);
+      console.log(`[24-7] [${reason}] Restored connection in ${guild.name} (<#${channelId}>)`);
     } catch (err) {
-      console.error(`[24-7] [${reason}] Failed to restore connection in ${guild.name}: ${(err as Error).message}`);
+      console.error(`[24-7] [${reason}] Failed to restore connection in ${guild.name}: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     // Stagger to avoid a burst of simultaneous voice-gateway handshakes.

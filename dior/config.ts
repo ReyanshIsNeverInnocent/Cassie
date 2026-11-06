@@ -228,15 +228,8 @@ export const config: Config = {
   },
 
   // ── 8b. Music ──────────────────────────────────────────────────────────────
-  defaultSource: 'ytsearch',
+  defaultSource: 'dzsearch',
   nodes: [
-    /* {
-      host:   'merlion.endercloud.in',
-      port:   46573,
-      name:   'Merlion',
-      auth:   'youshallnotpass',
-      secure: false,
-    }, */
     {
       host:   'lavalinkv4.serenetia.com',
       port:   443,
@@ -245,11 +238,39 @@ export const config: Config = {
       secure: true,
     },
     {
-      host:   'lavalink.jirayu.net',
-      port:   13592,
-      name:   'Jirayu',
+      host:   'lava-v4.millohost.my.id',
+      port:   443,
+      name:   'Millohost-v4',
+      auth:   'https://discord.gg/mjS5J2K3ep',
+      secure: true,
+    },
+    {
+      host:   'lavalink-v4.triniumhost.com',
+      port:   443,
+      name:   'TriniumHost-v4',
+      auth:   'free',
+      secure: true,
+    },
+    {
+      host:   'nodelink.triniumhost.com',
+      port:   443,
+      name:   'TriniumHost-NodeLink',
+      auth:   'free',
+      secure: true,
+    },
+    {
+      host:   'lavalink.nazha.online',
+      port:   443,
+      name:   'Nazha-v4',
+      auth:   'nazhafreelava',
+      secure: true,
+    },
+    {
+      host:   'nodelink.gdjkhp.com',
+      port:   443,
+      name:   'GDjkhp-NodeLink',
       auth:   'youshallnotpass',
-      secure: false,
+      secure: true,
     },
   ],
   // ── 8c. Now-playing sample ─────────────────────────────────────────────────
