@@ -27,6 +27,7 @@ import { emojiUploadSessions } from '../../commands/developer/emoji-upload.js';
 import { AmbiguousUserError } from '../../helpers/userResolver.js';
 import { consumeCommandCooldown, getCommandCooldown, getPrefixSubcommand } from '../../helpers/commandCooldown.js';
 import { getDisabledCommandStatus } from '../../helpers/disabledCommand.js';
+import { processTextMessageLock } from '../../helpers/textMessageLocks.js';
 
 export const name = 'messageCreate';
 export const once = false;
@@ -48,6 +49,8 @@ export async function execute(message: any, client: CassieClient): Promise<void>
     }
     return;
   }
+
+  if (await processTextMessageLock(message, client)) return;
 
   if (await enforceHoneypot(message, client)) return;
 

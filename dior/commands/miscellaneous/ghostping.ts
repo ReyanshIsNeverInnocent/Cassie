@@ -26,7 +26,7 @@ export const options = {
   usage:       'ghostping <@user1> [@user2] [@user3] [@user4] [@user5] | <role>',
   category:    'miscellaneous',
   owner:       false,
-  cooldown:    30,
+  cooldown:    10,
 };
 
 const MAX_USERS = 5;

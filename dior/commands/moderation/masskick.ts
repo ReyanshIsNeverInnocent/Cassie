@@ -1,9 +1,9 @@
 // xoxo/commands/moderation/masskick.ts
 //
-// Kick multiple members at once by providing their IDs or mentions.
+// Kick multiple members at once by providing IDs, mentions, or usernames.
 //
-// Prefix:  $masskick <id|@mention> [id|@mention] ...
-// Slash:   /masskick users:<space-separated IDs>
+// Prefix:  $masskick <user> <user> ...
+// Slash:   /masskick users:<space-separated users>
 //
 // Maximum 50 users per invocation.
 // Always asks for confirmation before kicking.
@@ -18,15 +18,16 @@ import {
   buildActionTimedOutPayload,
   buildActionCancelledPayload,
 } from '../../components/purgeConfirm.js';
+import { parseUserInputs, resolveMembers } from '../../helpers/massModeration.js';
 
 export const options = {
   name:        'masskick',
-  aliases:     ['mkick'] as string[],
-  description: 'Kick multiple members at once by ID or mention (max 50). Asks for confirmation.',
-  usage:       'masskick <id|@mention> [id|@mention] ...',
+  aliases:     [] as string[],
+  description: 'Kick multiple members at once (max 50). Server owner only.',
+  usage:       'masskick <user> <user> ...',
   category:    'moderation',
   owner:       false,
-  cooldown:    5,
+  cooldown:    10,
 };
 
 const MAX_TARGETS  = 50;
@@ -86,15 +87,6 @@ async function askConfirm(
 // Core kick logic
 // ─────────────────────────────────────────────────────────────────────────────
 
-function parseIds(rawArgs: string[]): string[] {
-  return rawArgs
-    .map((a) => {
-      const m = a.match(/^<@!?(\d+)>$/);
-      return m ? m[1] : a;
-    })
-    .filter((id) => /^\d{17,20}$/.test(id));
-}
-
 async function runMassKick(
   ctx:      { message?: any; interaction?: any; channel?: any },
   guild:    any,
@@ -134,6 +126,9 @@ export async function prefixExecute(
   const ctx   = { message };
   const guild = message.guild;
   if (!guild) return sendError(ctx, 'This command can only be used in a server.');
+  if (message.author.id !== guild.ownerId) {
+    return sendError(ctx, 'Only the server owner can use this command.');
+  }
 
   const invokerPerms = message.channel.permissionsFor?.(message.member);
   if (!invokerPerms?.has?.(PermissionFlagsBits.KickMembers)) {
@@ -145,30 +140,20 @@ export async function prefixExecute(
     return sendError(ctx, 'I need the **Kick Members** permission to kick members.');
   }
 
-  if (args.length === 0) {
-    return sendError(ctx, `Provide at least one user ID or mention. Usage: \`${options.usage}\``);
+  const userInputs = parseUserInputs(message.commandRawArgs ?? args.join(' '));
+  if (userInputs.length === 0) {
+    return sendError(ctx, `Provide at least one user. Usage: \`${options.usage}\``);
+  }
+  if (userInputs.length > MAX_TARGETS) {
+    return sendError(ctx, `You can kick at most **${MAX_TARGETS}** users at once. You provided **${userInputs.length}**.`);
   }
 
-  const rawIds = parseIds(args);
-  if (rawIds.length === 0) {
-    return sendError(ctx, 'No valid user IDs or mentions found. Provide Discord user IDs or @mentions.');
-  }
-  if (rawIds.length > MAX_TARGETS) {
-    return sendError(ctx, `You can kick at most **${MAX_TARGETS}** users at once. You provided **${rawIds.length}**.`);
-  }
-
-  // Resolve members
-  const members: any[]    = [];
-  const notFound: string[] = [];
-  for (const id of rawIds) {
-    if (id === message.author.id) { notFound.push(id); continue; } // can't kick self
-    const m = await guild.members.fetch(id).catch((): null => null);
-    if (m) members.push(m);
-    else   notFound.push(id);
-  }
+  const { members, notFound } = await resolveMembers(
+    userInputs, guild, _client, [message.author.id, guild.ownerId],
+  );
 
   if (members.length === 0) {
-    return sendError(ctx, 'None of the provided IDs belong to members currently in this server.');
+    return sendError(ctx, 'None of the provided users are eligible members of this server.');
   }
 
   const listLines = members
@@ -180,7 +165,7 @@ export async function prefixExecute(
 
   let desc = `Are you sure you want to kick these **${members.length}** member${members.length !== 1 ? 's' : ''}?\n${listPreview}`;
   if (notFound.length > 0) {
-    desc += `\n\n-# **${notFound.length}** ID${notFound.length !== 1 ? 's' : ''} not found / not in server (will be ignored).`;
+    desc += `\n\n-# **${notFound.length}** user${notFound.length !== 1 ? 's' : ''} not found, not in server, or skipped (will be ignored).`;
   }
 
   return askConfirm(message, desc, () =>
@@ -200,6 +185,9 @@ export async function slashExecute(
   const ctx   = { interaction };
   const guild = interaction.guild;
   if (!guild) return sendError(ctx, 'This command can only be used in a server.');
+  if (interaction.user.id !== guild.ownerId) {
+    return sendError(ctx, 'Only the server owner can use this command.');
+  }
 
   const invokerMember = interaction.member;
   if (!invokerMember?.permissions?.has?.(PermissionFlagsBits.KickMembers)) {
@@ -212,26 +200,21 @@ export async function slashExecute(
   }
 
   const rawInput: string = interaction.options.getString('users', true);
-  const rawIds = parseIds(rawInput.split(/\s+/));
+  const userInputs = parseUserInputs(rawInput);
 
-  if (rawIds.length === 0) {
-    return sendError(ctx, 'No valid user IDs found. Provide space-separated Discord user IDs.');
+  if (userInputs.length === 0) {
+    return sendError(ctx, 'Provide at least one user.');
   }
-  if (rawIds.length > MAX_TARGETS) {
+  if (userInputs.length > MAX_TARGETS) {
     return sendError(ctx, `You can kick at most **${MAX_TARGETS}** users at once.`);
   }
 
-  const members: any[]     = [];
-  const notFound: string[] = [];
-  for (const id of rawIds) {
-    if (id === interaction.user.id) { notFound.push(id); continue; }
-    const m = await guild.members.fetch(id).catch((): null => null);
-    if (m) members.push(m);
-    else   notFound.push(id);
-  }
+  const { members, notFound } = await resolveMembers(
+    userInputs, guild, _client, [interaction.user.id, guild.ownerId],
+  );
 
   if (members.length === 0) {
-    return sendError(ctx, 'None of the provided IDs belong to members currently in this server.');
+    return sendError(ctx, 'None of the provided users are eligible members of this server.');
   }
 
   // ── Confirmation ──────────────────────────────────────────────────────────
@@ -244,7 +227,7 @@ export async function slashExecute(
 
   let desc = `Are you sure you want to kick these **${members.length}** member${members.length !== 1 ? 's' : ''}?\n${listPreview}`;
   if (notFound.length > 0) {
-    desc += `\n\n-# **${notFound.length}** ID${notFound.length !== 1 ? 's' : ''} not found / not in server (will be ignored).`;
+    desc += `\n\n-# **${notFound.length}** user${notFound.length !== 1 ? 's' : ''} not found, not in server, or skipped (will be ignored).`;
   }
 
   const confirmId = `mk:confirm:${interaction.id}`;

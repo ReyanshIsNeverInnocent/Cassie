@@ -200,6 +200,14 @@ export interface MemberRestrictionDoc {
   updated_at:    Date;
 }
 
+export interface TextMessageLockDoc {
+  guild_id: string;
+  user_id: string;
+  mode: 'uwu' | 'freaky';
+  moderator_id: string;
+  updated_at: Date;
+}
+
 export interface MediaChannelsDoc {
   guild_id:   string;
   channel_ids: string[];
@@ -922,6 +930,36 @@ export class Database {
     return this.col<MemberRestrictionDoc>('member_restrictions')
       .find({ guild_id: guildId, $or: [{ image_muted: true }, { reaction_muted: true }] })
       .toArray();
+  }
+
+  async getTextMessageLock(guildId: string, userId: string): Promise<TextMessageLockDoc | null> {
+    await this.connect();
+    return this.col<TextMessageLockDoc>('text_message_locks').findOne({
+      guild_id: guildId,
+      user_id: userId,
+    });
+  }
+
+  async setTextMessageLock(
+    guildId: string,
+    userId: string,
+    mode: TextMessageLockDoc['mode'],
+    moderatorId: string,
+  ): Promise<void> {
+    await this.connect();
+    await this.col<TextMessageLockDoc>('text_message_locks').updateOne(
+      { guild_id: guildId, user_id: userId },
+      { $set: { mode, moderator_id: moderatorId, updated_at: new Date() } },
+      { upsert: true },
+    );
+  }
+
+  async deleteTextMessageLock(guildId: string, userId: string): Promise<void> {
+    await this.connect();
+    await this.col<TextMessageLockDoc>('text_message_locks').deleteOne({
+      guild_id: guildId,
+      user_id: userId,
+    });
   }
 
   async setMemberRestriction(

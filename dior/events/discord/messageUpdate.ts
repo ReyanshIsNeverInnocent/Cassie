@@ -10,6 +10,7 @@ import { buildMessageUpdatePayload } from '../../components/logging/logMessages.
 import { getStarboardSettingsForReaction, syncStarboardReaction } from '../../helpers/starboard.js';
 import { enforceImageRestriction } from '../../helpers/memberRestrictions.js';
 import { enforceMediaChannel } from '../../helpers/mediaChannel.js';
+import { processTextMessageLock } from '../../helpers/textMessageLocks.js';
 
 export const name = 'messageUpdate';
 export const once = false;
@@ -17,6 +18,7 @@ export const once = false;
 export async function execute(oldMessage: any, newMessage: any, client: CassieClient): Promise<void> {
   if (!newMessage.guild) return;
   if (newMessage.author?.bot) return;
+  if (oldMessage.content !== newMessage.content && await processTextMessageLock(newMessage, client)) return;
   if (await enforceMediaChannel(newMessage, client)) return;
   if (await enforceImageRestriction(newMessage, client)) return;
 
