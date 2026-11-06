@@ -90,6 +90,10 @@ export interface Config {
   supportServer: string;
   /** Public commands documentation page URL. */
   commandsPageUrl: string;
+  /** Public privacy policy URL. */
+  privacyPolicyUrl: string;
+  /** Public terms of service URL. */
+  termsOfServiceUrl: string;
   /** Header image URL used by the help panel. */
   helpPanelImage: string;
   /** Support server guild ID — its saved name style is used as the default for all other guilds. */
@@ -215,6 +219,8 @@ export const config: Config = {
   // ── 6. Links ───────────────────────────────────────────────────────────────
   supportServer: "https://discord.gg/YpCfcCTXdv",
   commandsPageUrl: "https://cassiewho.vercel.app/commands",
+  privacyPolicyUrl: "https://cassiewho.vercel.app/privacy",
+  termsOfServiceUrl: "https://cassiewho.vercel.app/terms",
   helpPanelImage: 'helpImage.png',
   supportServerId: "1493286181885050961",
 

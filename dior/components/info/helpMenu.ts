@@ -296,7 +296,11 @@ export async function buildHelpMenuPayload(
     .addSeparatorComponents(
       new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
     )
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Thank you for your support.'));
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `-# [Privacy Policy](${config.privacyPolicyUrl}) • [Terms of Service](${config.termsOfServiceUrl})`,
+      ),
+    );
 
   return {
     components: [container],
@@ -334,7 +338,11 @@ export async function buildCategoryPayload(
     .addSeparatorComponents(
       new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
     )
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Thank you for your support.'));
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `-# [Privacy Policy](${config.privacyPolicyUrl}) • [Terms of Service](${config.termsOfServiceUrl})`,
+      ),
+    );
 
   return {
     components: [container],
