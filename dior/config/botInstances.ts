@@ -108,7 +108,7 @@ export const botInstances: BotInstance[] = [
       { text: "✨ When the sun goes down, and the moon comes up!" },
       { text: "Screwing with {users} people." },
       { text: "Devil is a lie." },
-      { text: "SHE'S WORKING IN THE PYRAMIDS AT NIGHT" },
+      { text: "she's working at the PYRAMID tonight" },
       { text: "Dear Lord, when I get to Heaven, Please, LET ME BRING MY MAN!" },
       { text: "Goddamn bitch, I am not a Teen Choice."},
       { text: "welcome to the HOTEL CALIFORNIA"},
