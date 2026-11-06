@@ -9,14 +9,14 @@ Moderation, music, server protection, games, and a bunch of useful little things
 <p>
   <img src="https://img.shields.io/badge/discord.js-v14-75658F?style=flat-square&logo=discord&logoColor=white" alt="discord.js v14">
   <img src="https://img.shields.io/badge/TypeScript-6.0.3-617F9C?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 6.0.3">
-  <img src="https://img.shields.io/badge/PostgreSQL-database-64877C?style=flat-square" alt="PostgreSQL database">
+  <img src="https://img.shields.io/badge/PostgreSQL-Supabase-64877C?style=flat-square" alt="PostgreSQL Supabase">
   <img src="https://img.shields.io/badge/license-MIT-A17A8B?style=flat-square" alt="MIT License">
 </p>
 
 </div>
 
 <p align="center">
-  <img src="https://i.ibb.co/cSLhmbpN/image-3.png" alt="Cassie banner" width="100%">
+  <img src="https://i.ibb.co/cSLhmbpN/image-3.png" alt="Cassie banner" width="70%">
 </p>
 
 ## So, what is Cassie?
