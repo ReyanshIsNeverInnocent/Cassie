@@ -11,5 +11,8 @@ grace.md
 .env
 *.zip
 scripts/
+!scripts/
+scripts/*
+!scripts/check-command-parity.mjs
 .vscode
 dior/chronicles/

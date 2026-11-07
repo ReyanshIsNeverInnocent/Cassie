@@ -53,14 +53,9 @@ export const slashCommandPermissionRequirements = new Map<string, string>();
 export async function registerSlashCommands(client: CassieClient): Promise<void> {
   const token    = client.config.botToken;
   const clientId = client.config.clientId;
-
-  if (!token || !clientId) {
-    console.warn('[SLASH REG] Missing DISCORD_TOKEN or DISCORD_CLIENT_ID — skipping registration.');
-    return;
-  }
-
   const dir      = join(process.cwd(), 'dist', 'dior', 'slashCommands');
   const builders: any[] = [];
+  client.websiteSlashCommands.clear();
 
   try {
     await collectBuilders(dir, builders);
@@ -72,17 +67,29 @@ export async function registerSlashCommands(client: CassieClient): Promise<void>
     throw err;
   }
 
-  if (builders.length === 0) {
-    console.info('[SLASH REG] No slash command builders found.');
-    return;
-  }
-
   if (builders.length > MAX_GLOBAL_SLASH_COMMANDS) {
     const overflow = builders.splice(MAX_GLOBAL_SLASH_COMMANDS);
     console.warn(
       `[SLASH REG] Found ${builders.length + overflow.length} commands; registering the first ${MAX_GLOBAL_SLASH_COMMANDS}. ` +
       `Prefix-only overflow: ${overflow.map((builder) => builder.toJSON()?.name).join(', ')}`,
     );
+  }
+
+  for (const builder of builders) {
+    const json = builder.toJSON() as Record<string, unknown>;
+    if (typeof json.name === 'string') {
+      client.websiteSlashCommands.set(json.name.toLowerCase(), json);
+    }
+  }
+
+  if (!token || !clientId) {
+    console.warn('[SLASH REG] Missing DISCORD_TOKEN or DISCORD_CLIENT_ID — skipping registration.');
+    return;
+  }
+
+  if (builders.length === 0) {
+    console.info('[SLASH REG] No slash command builders found.');
+    return;
   }
 
   slashCommandPermissionRequirements.clear();

@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import * as vm from 'node:vm';
 import { inspect } from 'node:util';
 import type { CassieClient } from '../structures/CassieClient.js';
+import { publishWebsiteCommandSnapshot } from './websiteCommandPublisher.js';
 
 const execFile = promisify(execFileCallback);
 const WORKSPACE_ROOT = realpathSync(process.cwd());
@@ -295,6 +296,17 @@ export async function reloadPrefixCommand(
     }
     for (const alias of mod.options?.aliases ?? []) {
       client.aliases.set(alias.toLowerCase(), targetName);
+    }
+
+    try {
+      await publishWebsiteCommandSnapshot(client);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[WEB COMMANDS] Publish after reload failed: ${message}`);
+      return {
+        output: `Reloaded prefix command \`${targetName}\`, but failed to update the website catalog: ${message}`,
+        success: false,
+      };
     }
 
     return {

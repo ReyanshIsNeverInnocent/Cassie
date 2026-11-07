@@ -556,6 +556,30 @@ export interface UserInvokeDoc {
   updated_at: Date;
 }
 
+export interface WebsiteCommandSnapshot {
+  updatedAt: number;
+  commands: WebsiteCommandSnapshotEntry[];
+}
+
+export interface WebsiteCommandSnapshotEntry {
+  name: string;
+  category: string;
+  description: string;
+  usage: string;
+  prefix: boolean;
+  slash: boolean;
+  aliases: string[];
+  permission: string | null;
+  cooldown: number | { default?: number; subcommands?: Record<string, number> };
+  ownerOnly: boolean;
+  serverOwnerOnly: boolean;
+  trustedAdministrator: boolean;
+  userPerms: string[];
+  botPerms: string[];
+  commandOptions: Record<string, unknown>;
+  slashCommand?: Record<string, unknown>;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Database Class
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2000,6 +2024,15 @@ export class Database {
     await this.connect();
     await this.col('settings').updateOne(
       { _id: 'website_stats_snapshot' } as any,
+      { $set: snapshot },
+      { upsert: true },
+    );
+  }
+
+  async updateWebsiteCommandSnapshot(snapshot: WebsiteCommandSnapshot): Promise<void> {
+    await this.connect();
+    await this.col('settings').updateOne(
+      { _id: 'website_commands_snapshot' } as any,
       { $set: snapshot },
       { upsert: true },
     );

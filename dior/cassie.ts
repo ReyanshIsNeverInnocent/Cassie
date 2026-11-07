@@ -35,6 +35,7 @@ import { migrateVoiceMasterSetups } from './helpers/voiceMaster.js';
 import { initializeReminders } from './helpers/reminderStore.js';
 import { initializeGiveawayScheduler } from './helpers/giveawayManager.js';
 import { startWebsiteStatsPublisher } from './helpers/websiteStatsPublisher.js';
+import { publishWebsiteCommandSnapshot } from './helpers/websiteCommandPublisher.js';
 import { reconnectAllOnBoot } from './helpers/twentyFourSeven.js';
 
 // ── Global unhandled-rejection safety net ──────────────────────────────────
@@ -138,6 +139,14 @@ async function bootstrap(): Promise<void> {
   await loadPrefixCommands(client);
   await loadSlashCommands(client);
   await registerSlashCommands(client);
+  if (Number((client.cluster as any)?.id ?? 0) === 0) {
+    try {
+      await publishWebsiteCommandSnapshot(client);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[WEB COMMANDS] Initial publish failed: ${message}`);
+    }
+  }
 
   // ── Presence (StatusManager) ─────────────────────────────────────────────────
   const statusManager = new StatusManager(client, process.env['DISCORD_CLIENT_ID']);

@@ -96,6 +96,7 @@ export class CassieClient extends Client {
   public config        = config;
   public commands:      Collection<string, any>;
   public slashCommands: Collection<string, any>;
+  public websiteSlashCommands = new Map<string, Record<string, unknown>>();
   public aliases:       Collection<string, string>;
   public cooldowns:     Collection<string, number>;
   /** Keyed helpers attached by helperLoader — access as `client.helpers.helperName`. */
