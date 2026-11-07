@@ -9,6 +9,7 @@ import {
   ActionRowBuilder,
   MessageFlags,
   ModalBuilder,
+  PermissionFlagsBits,
   TextInputBuilder,
   TextInputStyle,
 } from 'discord.js';
@@ -18,6 +19,7 @@ import { AmbiguousUserError } from '../../helpers/userResolver.js';
 import webhookLogger from '../../utils/webhookLogger.js';
 import { sendError, sendWarning, reservedForDeveloper } from '../../components/statusMessages.js';
 import { consumeCommandCooldown, getCommandCooldown } from '../../helpers/commandCooldown.js';
+import { slashCommandPermissionRequirements } from '../../handlers/commandRegister.js';
 import { getDisabledCommandStatus } from '../../helpers/disabledCommand.js';
 import {
   debugSessions,
@@ -231,11 +233,29 @@ export async function execute(interaction: any, client: CassieClient): Promise<v
     if (!command) return;
 
     const developers: [string, string][] = client.config.developers;
+    const isDeveloper = developers.some(([, id]: [string, string]) => id === interaction.user.id);
     if (
       (command.options?.owner === true || command.options?.isDeveloper === true) &&
-      !developers.some(([, id]: [string, string]) => id === interaction.user.id)
+      !isDeveloper
     ) {
       await reservedForDeveloper({ interaction });
+      return;
+    }
+
+    const permissionMask = slashCommandPermissionRequirements.get(interaction.commandName);
+    if (permissionMask && !isDeveloper &&
+        !interaction.memberPermissions?.any?.(BigInt(permissionMask))) {
+      const requiredPermissions = Object.entries(PermissionFlagsBits)
+        .filter(([, bit]) => {
+          const value = BigInt(bit as bigint);
+          const mask = BigInt(permissionMask);
+          return (mask & value) === value;
+        })
+        .map(([permission]) => permission.replace(/([a-z])([A-Z])/g, '$1 $2'));
+      await sendError(
+        { interaction },
+        `You need ${requiredPermissions.map((permission) => `**${permission}**`).join(' or ')} permission to use this command.`,
+      );
       return;
     }
 
@@ -281,10 +301,11 @@ export async function execute(interaction: any, client: CassieClient): Promise<v
     }, null, interaction.channelId);
 
     try {
+      interaction.commandUsage = command.options?.usage;
       await command.slashExecute(
         withDeveloperPermissionBypass(
           interaction,
-          developers.some(([, id]: [string, string]) => id === interaction.user.id),
+          isDeveloper,
         ),
         client,
       );

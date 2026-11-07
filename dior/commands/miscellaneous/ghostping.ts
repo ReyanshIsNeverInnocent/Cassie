@@ -18,6 +18,7 @@ import type { CassieClient } from '../../structures/CassieClient.js';
 import { sendError, sendSuccess } from '../../components/statusMessages.js';
 import { resolveRole } from '../../helpers/roleResolver.js';
 import { resolveUser } from '../../helpers/userResolver.js';
+import { isBotDeveloper } from '../../helpers/developerPermissionBypass.js';
 
 export const options = {
   name:        'ghostping',
@@ -87,7 +88,7 @@ async function sendGhostPing(channel: any, target: GhostPingTarget): Promise<voi
 export async function prefixExecute(
   message: any,
   args:    string[],
-  _client: CassieClient,
+  client: CassieClient,
 ): Promise<any> {
   const ctx = { message };
 
@@ -111,7 +112,7 @@ export async function prefixExecute(
 
   const role = resolveRole(message.guild, args.join(' '));
   if (role) {
-    if (message.guild.ownerId !== message.author.id) {
+    if (message.guild.ownerId !== message.author.id && !isBotDeveloper(client, message.author.id)) {
       return sendError(ctx, 'Only the server owner can ghost-ping a role.');
     }
 
@@ -124,7 +125,7 @@ export async function prefixExecute(
     return;
   }
 
-  const userIds = await extractUserIds(args, _client, message.guild);
+  const userIds = await extractUserIds(args, client, message.guild);
   if (!userIds.length) {
     return sendError(ctx, 'No valid users found. Please mention users, provide user IDs, or enter usernames.');
   }
@@ -143,7 +144,7 @@ export async function prefixExecute(
 
 export async function slashExecute(
   interaction: any,
-  _client:     CassieClient,
+  client:      CassieClient,
 ): Promise<any> {
   await interaction.deferReply({ ephemeral: true });
 
@@ -165,7 +166,7 @@ export async function slashExecute(
 
   const roleInput = interaction.options.getString('role', false)?.trim();
   if (roleInput) {
-    if (interaction.guild.ownerId !== interaction.user.id) {
+    if (interaction.guild.ownerId !== interaction.user.id && !isBotDeveloper(client, interaction.user.id)) {
       return sendError(ctx, 'Only the server owner can ghost-ping a role.');
     }
 

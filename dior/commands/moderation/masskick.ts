@@ -7,12 +7,14 @@
 //
 // Maximum 50 users per invocation.
 // Always asks for confirmation before kicking.
-// Requires KickMembers for both the invoker and the bot.
+// Requires KickMembers for the bot. Only the server owner or a trusted administrator
+// may start the operation.
 
 import { PermissionFlagsBits } from 'discord.js';
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { sendError, sendSuccess } from '../../components/statusMessages.js';
 import { authorOnlyFilter } from '../../helpers/panelGuard.js';
+import { checkGuildCommandAccess } from '../../helpers/trustedAdministrators.js';
 import {
   buildActionConfirmPayload,
   buildActionTimedOutPayload,
@@ -23,10 +25,11 @@ import { parseUserInputs, resolveMembers } from '../../helpers/massModeration.js
 export const options = {
   name:        'masskick',
   aliases:     [] as string[],
-  description: 'Kick multiple members at once (max 50). Server owner only.',
+  description: 'Kick multiple members at once (max 50). Server owner or trusted administrator only.',
   usage:       'masskick <user> <user> ...',
   category:    'moderation',
   owner:       false,
+  trustedAdministrator: true,
   cooldown:    10,
 };
 
@@ -126,14 +129,8 @@ export async function prefixExecute(
   const ctx   = { message };
   const guild = message.guild;
   if (!guild) return sendError(ctx, 'This command can only be used in a server.');
-  if (message.author.id !== guild.ownerId) {
-    return sendError(ctx, 'Only the server owner can use this command.');
-  }
-
-  const invokerPerms = message.channel.permissionsFor?.(message.member);
-  if (!invokerPerms?.has?.(PermissionFlagsBits.KickMembers)) {
-    return sendError(ctx, 'You need the **Kick Members** permission to use this command.');
-  }
+  const access = await checkGuildCommandAccess(options, guild, message.author.id, _client);
+  if ('error' in access) return sendError(ctx, access.error);
 
   const botMember = guild.members.me;
   if (!botMember?.permissions?.has?.(PermissionFlagsBits.KickMembers)) {
@@ -163,14 +160,20 @@ export async function prefixExecute(
     ? listLines.slice(0, 800) + '\n…'
     : listLines;
 
-  let desc = `Are you sure you want to kick these **${members.length}** member${members.length !== 1 ? 's' : ''}?\n${listPreview}`;
+  let desc = `**Warning:** This will remove these members from the server and cannot be undone automatically.\n\n` +
+    `Are you sure you want to kick these **${members.length}** member${members.length !== 1 ? 's' : ''}?\n${listPreview}`;
   if (notFound.length > 0) {
     desc += `\n\n-# **${notFound.length}** user${notFound.length !== 1 ? 's' : ''} not found, not in server, or skipped (will be ignored).`;
   }
 
-  return askConfirm(message, desc, () =>
-    runMassKick(ctx, guild, members, message.author.username),
-  );
+  return askConfirm(message, desc, async () => {
+    const confirmedAccess = await checkGuildCommandAccess(options, guild, message.author.id, _client);
+    if ('error' in confirmedAccess) {
+      await sendError(ctx, confirmedAccess.error);
+      return;
+    }
+    await runMassKick(ctx, guild, members, message.author.username);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -185,14 +188,8 @@ export async function slashExecute(
   const ctx   = { interaction };
   const guild = interaction.guild;
   if (!guild) return sendError(ctx, 'This command can only be used in a server.');
-  if (interaction.user.id !== guild.ownerId) {
-    return sendError(ctx, 'Only the server owner can use this command.');
-  }
-
-  const invokerMember = interaction.member;
-  if (!invokerMember?.permissions?.has?.(PermissionFlagsBits.KickMembers)) {
-    return sendError(ctx, 'You need the **Kick Members** permission to use this command.');
-  }
+  const access = await checkGuildCommandAccess(options, guild, interaction.user.id, _client);
+  if ('error' in access) return sendError(ctx, access.error);
 
   const botMember = guild.members.me;
   if (!botMember?.permissions?.has?.(PermissionFlagsBits.KickMembers)) {
@@ -225,7 +222,8 @@ export async function slashExecute(
     ? listLines.slice(0, 800) + '\n…'
     : listLines;
 
-  let desc = `Are you sure you want to kick these **${members.length}** member${members.length !== 1 ? 's' : ''}?\n${listPreview}`;
+  let desc = `**Warning:** This will remove these members from the server and cannot be undone automatically.\n\n` +
+    `Are you sure you want to kick these **${members.length}** member${members.length !== 1 ? 's' : ''}?\n${listPreview}`;
   if (notFound.length > 0) {
     desc += `\n\n-# **${notFound.length}** user${notFound.length !== 1 ? 's' : ''} not found, not in server, or skipped (will be ignored).`;
   }
@@ -256,6 +254,11 @@ export async function slashExecute(
     await i.deferUpdate().catch((): null => null);
     if (i.customId === confirmId) {
       await interaction.deleteReply().catch((): null => null);
+      const confirmedAccess = await checkGuildCommandAccess(options, guild, interaction.user.id, _client);
+      if ('error' in confirmedAccess) {
+        await sendError(channelCtx, confirmedAccess.error);
+        return;
+      }
       await runMassKick(channelCtx, guild, members, interaction.user.username);
     } else {
       await i

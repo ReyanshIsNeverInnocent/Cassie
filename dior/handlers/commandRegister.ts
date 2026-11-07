@@ -44,6 +44,10 @@ const PREFIX_ONLY_SLASH_COMMANDS = new Set([
 
 const MAX_GLOBAL_SLASH_COMMANDS = 100;
 
+/** Default permission masks are enforced by the interaction router instead of Discord,
+ * so configured bot developers can invoke otherwise-restricted slash commands. */
+export const slashCommandPermissionRequirements = new Map<string, string>();
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export async function registerSlashCommands(client: CassieClient): Promise<void> {
@@ -81,6 +85,17 @@ export async function registerSlashCommands(client: CassieClient): Promise<void>
     );
   }
 
+  slashCommandPermissionRequirements.clear();
+  for (const builder of builders) {
+    const json = builder.toJSON() as Record<string, any>;
+    if (json.default_member_permissions !== null && json.default_member_permissions !== undefined) {
+      slashCommandPermissionRequirements.set(
+        json.name,
+        String(json.default_member_permissions),
+      );
+    }
+  }
+
   const rest = new REST({ version: '10' }).setToken(token);
 
   try {
@@ -95,6 +110,9 @@ export async function registerSlashCommands(client: CassieClient): Promise<void>
         if (!Array.isArray(json.integration_types)) {
           json.integration_types = [0];
           json.contexts          = [0]; // Guild context only
+        }
+        if (json.default_member_permissions !== undefined) {
+          json.default_member_permissions = null;
         }
         return json;
       }),

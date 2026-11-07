@@ -12,6 +12,7 @@ import {
 } from 'discord.js';
 import { emojis } from '../emojis.js';
 import { escapeFormatting } from '../utils/formatting.js';
+import { sendWrongUsage } from './wrongUsage.js';
 
 export interface StatusContext {
   interaction?: ChatInputCommandInteraction;
@@ -79,6 +80,24 @@ export async function sendSuccess(context: StatusContext, content: string) {
   return sendStatus(context, `${emojis.blacktick} ${content}`);
 }
 export async function sendError(context: StatusContext, content: string) {
+  if (/\busage\s*:/i.test(content)) {
+    const message = context.message as (Message & {
+      commandName?: string;
+      commandUsage?: string;
+    }) | undefined;
+    const interaction = context.interaction as (ChatInputCommandInteraction & {
+      commandUsage?: string;
+    }) | undefined;
+    const commandName = message?.commandName ?? interaction?.commandName;
+    const usage = message?.commandUsage ?? interaction?.commandUsage;
+    if (commandName && usage) {
+      return sendWrongUsage(
+        message ? { message } : { interaction },
+        commandName,
+        usage,
+      );
+    }
+  }
   return sendStatus(context, `${emojis.redcross} ${content}`);
 }
 export async function sendWarning(context: StatusContext, content: string) {

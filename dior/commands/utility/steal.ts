@@ -7,8 +7,10 @@ import {
   MediaGalleryItemBuilder,
   MessageFlags,
   PermissionFlagsBits,
+  StickerFormatType,
   SeparatorBuilder,
   TextDisplayBuilder,
+  type Sticker,
 } from 'discord.js';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import type { CassieClient } from '../../structures/CassieClient.js';
@@ -19,8 +21,8 @@ import { resolveEmoji } from '../../helpers/emojiResolver.js';
 export const options = {
   name: 'steal',
   aliases: [] as string[],
-  description: 'Copy custom emojis into this server.',
-  usage: 'steal <emoji | emoji ID | emoji markdown | emoji name> <emoji> <emoji> ...\nAttach image files or reply to a message containing emojis/files',
+  description: 'Copy custom emojis or stickers into this server.',
+  usage: 'steal <emoji | emoji ID | emoji markdown | emoji name> <emoji> <emoji> ...\nAttach image files or reply to a message containing emojis/files/stickers',
   category: 'utility',
   owner: false,
   userPerms: ['ManageGuildExpressions'] as string[],
@@ -36,6 +38,7 @@ interface StealSource {
   identifier?: string;
   attachment?: any;
   imageUrl?: string;
+  sticker?: Sticker;
 }
 
 type StealMode = 'emoji' | 'sticker';
@@ -126,6 +129,7 @@ async function getSources(message: any, args: string[]): Promise<StealSource[] |
     if (!replied) return [];
     sources.push(...sourceIdentifiers(replied.content ?? '').map((identifier) => sourceFromToken(identifier)));
     sources.push(...imageAttachments(replied.attachments).map((attachment) => ({ attachment })));
+    sources.push(...[...(replied.stickers?.values?.() ?? [])].map((sticker: Sticker) => ({ sticker })));
   }
 
   sources.push(...imageAttachments(message.attachments).map((attachment) => ({ attachment })));
@@ -142,6 +146,9 @@ function randomFallbackName(usedNames: Set<string>): string {
 }
 
 async function sourcePreviewUrl(source: StealSource, client: CassieClient, guild: any): Promise<string | null> {
+  if (source.sticker) {
+    return source.sticker.format === StickerFormatType.Lottie ? null : source.sticker.url;
+  }
   if (source.attachment?.url) return source.attachment.url;
   if (source.imageUrl) return originalImageUrl(source.imageUrl);
 
@@ -244,13 +251,43 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
   const invalid: string[] = [];
   const failed: string[] = [];
   const usedNames = new Set<string>();
+  let lottieFailure: string | null = null;
 
   for (const source of sources) {
     let attachment: Buffer | null = null;
+    let stickerFileName: string | undefined;
     let name: string;
     let label: string;
 
-    if (source.attachment || source.imageUrl) {
+    if (source.sticker) {
+      name = source.sticker.name;
+      label = source.sticker.name;
+
+      if (source.sticker.format === StickerFormatType.Lottie) {
+        if (mode === 'emoji') {
+          lottieFailure = "Choose Sticker to preserve a Lottie sticker's animation.";
+        } else if (!message.guild.features.includes('VERIFIED') && !message.guild.features.includes('PARTNERED')) {
+          lottieFailure = 'Discord only allows Lottie sticker uploads to verified or partnered servers.';
+        }
+
+        if (lottieFailure) {
+          failed.push(`${label} (${lottieFailure})`);
+          continue;
+        }
+      }
+
+      attachment = await downloadImage(source.sticker.url).catch((): null => null);
+      if (!attachment) {
+        failed.push(label);
+        continue;
+      }
+
+      stickerFileName = source.sticker.format === StickerFormatType.Lottie
+        ? `${name}.json`
+        : source.sticker.format === StickerFormatType.GIF
+          ? `${name}.gif`
+          : `${name}.png`;
+    } else if (source.attachment || source.imageUrl) {
       const sourceUrl = source.attachment?.url ?? source.imageUrl!;
       attachment = await downloadImage(sourceUrl).catch((): null => null);
       if (!attachment) {
@@ -289,17 +326,27 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
     }
 
     try {
-      const uploadData = mode === 'sticker' ? await stickerBuffer(attachment) : attachment;
+      // Re-encoding a replied sticker would flatten APNG, GIF, or Lottie animation.
+      const uploadData = mode === 'sticker' && !source.sticker
+        ? await stickerBuffer(attachment)
+        : mode === 'emoji' && source.sticker?.format === StickerFormatType.APNG
+          ? await stickerBuffer(attachment)
+          : attachment;
       const created = mode === 'emoji'
         ? await message.guild.emojis.create({
             attachment: uploadData,
-            name,
+            name: source.sticker && !EMOJI_NAME_PATTERN.test(name)
+              ? randomFallbackName(usedNames)
+              : name,
             reason: `Emoji stolen by ${message.author.tag}.`,
           })
         : await message.guild.stickers.create({
-          file: uploadData,
+            file: {
+              attachment: uploadData,
+              name: stickerFileName ?? `${name}.png`,
+            },
             name: name.slice(0, 30),
-            tags: name.slice(0, 32),
+            tags: (source.sticker?.tags || name).slice(0, 200),
             reason: `Sticker stolen by ${message.author.tag}.`,
           });
       stolen.push(created);
@@ -309,8 +356,9 @@ export async function prefixExecute(message: any, args: string[], client: Cassie
   }
 
   if (!stolen.length) {
+    if (lottieFailure) return sendError({ message }, lottieFailure);
     if (invalid.length && !failed.length) return sendError({ message }, 'None of the provided emojis were valid custom emojis.');
-    return sendError({ message }, 'I could not steal any of those emojis. Check the emoji limit and my permissions.');
+    return sendError({ message }, 'I could not steal any of those items. Check the emoji or sticker limit and my permissions.');
   }
 
   const result = await sendSuccess(

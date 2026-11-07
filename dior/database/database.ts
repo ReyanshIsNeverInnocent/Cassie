@@ -242,6 +242,14 @@ export interface JailConfigDoc {
   updated_at:         Date;
 }
 
+export interface GuildTrustedAdministratorsDoc {
+  guild_id:   string;
+  user_ids:   string[];
+  updated_at: Date;
+}
+
+export const MAX_GUILD_TRUSTED_ADMINISTRATORS = 10;
+
 export type LogCategoryKey = 'channel' | 'member' | 'role' | 'vc' | 'message' | 'server' | 'modlog';
 
 export interface LogCategoryConfig {
@@ -871,6 +879,104 @@ export class Database {
     await this.connect();
     const result = await this.col<JailConfigDoc>('jail_configs').deleteOne({ guild_id: guildId });
     return result.deletedCount > 0;
+  }
+
+  async getGuildTrustedAdministrators(guildId: string): Promise<string[]> {
+    await this.connect();
+    const doc = await this.col<GuildTrustedAdministratorsDoc>('guild_extra_owners').findOne({ guild_id: guildId });
+    return doc?.user_ids ?? [];
+  }
+
+  async isGuildTrustedAdministrator(guildId: string, userId: string): Promise<boolean> {
+    return (await this.getGuildTrustedAdministrators(guildId)).includes(userId);
+  }
+
+  async addGuildTrustedAdministrator(
+    guildId: string,
+    userId: string,
+  ): Promise<'added' | 'already' | 'limit'> {
+    await this.connect();
+    return this.client.withClient(async (pg) => {
+      await pg.query('BEGIN');
+      try {
+        await pg.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [
+          `guild-extra-owners:${this.botId}`,
+          guildId,
+        ]);
+        const result = await pg.query<{ data: GuildTrustedAdministratorsDoc & { _id?: string } }>(
+          'SELECT data FROM bot_documents WHERE bot_id = $1 AND collection_name = $2 AND document_id = $3 FOR UPDATE',
+          [this.botId, 'guild_extra_owners', guildId],
+        );
+        const doc = result.rows[0]?.data;
+        const userIds = Array.isArray(doc?.user_ids) ? doc.user_ids : [];
+        if (userIds.includes(userId)) {
+          await pg.query('COMMIT');
+          return 'already';
+        }
+        if (userIds.length >= MAX_GUILD_TRUSTED_ADMINISTRATORS) {
+          await pg.query('COMMIT');
+          return 'limit';
+        }
+
+        const data: GuildTrustedAdministratorsDoc & { _id: string } = {
+          _id: guildId,
+          guild_id: guildId,
+          user_ids: [...userIds, userId],
+          updated_at: new Date(),
+        };
+        await pg.query(
+          `INSERT INTO bot_documents (bot_id, collection_name, document_id, data)
+           VALUES ($1, $2, $3, $4::jsonb)
+           ON CONFLICT (bot_id, collection_name, document_id)
+           DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+          [this.botId, 'guild_extra_owners', guildId, JSON.stringify(data)],
+        );
+        await pg.query('COMMIT');
+        return 'added';
+      } catch (err) {
+        await pg.query('ROLLBACK');
+        throw err;
+      }
+    });
+  }
+
+  async removeGuildTrustedAdministrator(guildId: string, userId: string): Promise<boolean> {
+    await this.connect();
+    return this.client.withClient(async (pg) => {
+      await pg.query('BEGIN');
+      try {
+        await pg.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [
+          `guild-extra-owners:${this.botId}`,
+          guildId,
+        ]);
+        const result = await pg.query<{ data: GuildTrustedAdministratorsDoc & { _id?: string } }>(
+          'SELECT data FROM bot_documents WHERE bot_id = $1 AND collection_name = $2 AND document_id = $3 FOR UPDATE',
+          [this.botId, 'guild_extra_owners', guildId],
+        );
+        const doc = result.rows[0]?.data;
+        const userIds = Array.isArray(doc?.user_ids) ? doc.user_ids : [];
+        if (!userIds.includes(userId)) {
+          await pg.query('COMMIT');
+          return false;
+        }
+
+        const data: GuildTrustedAdministratorsDoc & { _id: string } = {
+          _id: guildId,
+          guild_id: guildId,
+          user_ids: userIds.filter((id) => id !== userId),
+          updated_at: new Date(),
+        };
+        await pg.query(
+          'UPDATE bot_documents SET data = $4::jsonb, updated_at = NOW() WHERE bot_id = $1 AND collection_name = $2 AND document_id = $3',
+          [this.botId, 'guild_extra_owners', guildId, JSON.stringify(data)],
+        );
+        await pg.query('COMMIT');
+        return true;
+      } catch (err) {
+        await pg.query('ROLLBACK');
+        throw err;
+      }
+    });
   }
 
   // ── Media-only channels ────────────────────────────────────────────────────

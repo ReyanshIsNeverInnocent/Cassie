@@ -24,6 +24,12 @@
 import { PermissionFlagsBits, MessageFlags } from 'discord.js';
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { sendError, sendLoading, sendSuccess } from '../../components/statusMessages.js';
+import { authorOnlyFilter } from '../../helpers/panelGuard.js';
+import {
+  buildActionConfirmPayload,
+  buildActionTimedOutPayload,
+  buildActionCancelledPayload,
+} from '../../components/purgeConfirm.js';
 import { resolveUser } from '../../helpers/userResolver.js';
 import {
   buildMassNickTargetPanel,
@@ -199,6 +205,54 @@ async function runMassNick(
     .catch((): null => null);
 }
 
+async function askMassNickConfirmation(
+  panel: any,
+  authorId: string,
+  guild: any,
+  mode: MassNickMode,
+  word: string | null,
+  targetType: string,
+  displayLabel: string,
+  invoker: string,
+  token: string,
+  client: CassieClient,
+  specificIds: string[] = [],
+): Promise<void> {
+  const confirmId = `massnick:confirm:${token}`;
+  const cancelId = `massnick:cancel:${token}`;
+  const operation = `${mode}${word ? ` \`${word}\`` : ''}`;
+  const description =
+    `**Warning:** This bulk action may change many server nicknames and cannot be undone automatically.\n\n` +
+    `Apply **${operation}** to **${displayLabel}**?`;
+
+  await panel.edit(buildActionConfirmPayload(confirmId, cancelId, 'Confirm Mass Nickname', description));
+  const collector = panel.createMessageComponentCollector({
+    filter: (i: any) => authorOnlyFilter(
+      i,
+      authorId,
+      (id) => id === confirmId || id === cancelId,
+    ),
+    max: 1,
+    time: 30_000,
+  });
+
+  collector.on('collect', async (i: any) => {
+    await i.deferUpdate().catch((): null => null);
+    if (i.customId === confirmId) {
+      await runMassNick(panel, guild, mode, word, targetType, displayLabel, invoker, client, specificIds);
+      return;
+    }
+    await panel.edit(buildActionCancelledPayload(confirmId, cancelId, 'Confirm Mass Nickname', description))
+      .catch((): null => null);
+  });
+
+  collector.on('end', (_: any, reason: string) => {
+    if (reason !== 'time') return;
+    panel.edit(buildActionTimedOutPayload(confirmId, cancelId, 'Confirm Mass Nickname', description))
+      .catch((): null => null);
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared collector logic (used by both prefix and slash flows)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -241,8 +295,8 @@ function attachCollector(
     // ── Simple targets: run immediately ──────────────────────────────────
     if (action === 'all' || action === 'humans' || action === 'bots') {
       const label = targetDisplayLabel(action);
-      await runMassNick(panel, guild, mode, word, action, label, invoker, client);
-      collector.stop('done');
+      collector.stop('confirm');
+      await askMassNickConfirmation(panel, authorId, guild, mode, word, action, label, invoker, token, client);
       return;
     }
 
@@ -266,8 +320,8 @@ function attachCollector(
       const roleName   = guild.roles.cache.get(roleId)?.name ?? roleId;
       const targetType = `role:${roleId}`;
       const label      = `members with role **${roleName}**`;
-      await runMassNick(panel, guild, mode, word, targetType, label, invoker, client);
-      collector.stop('done');
+      collector.stop('confirm');
+      await askMassNickConfirmation(panel, authorId, guild, mode, word, targetType, label, invoker, token, client);
       return;
     }
 
@@ -292,7 +346,7 @@ function attachCollector(
         }
 
         const label = `**${ids.length}** specific member${ids.length !== 1 ? 's' : ''}`;
-        await runMassNick(panel, guild, mode, word, 'members', label, invoker, client, ids);
+        await askMassNickConfirmation(panel, authorId, guild, mode, word, 'members', label, invoker, token, client, ids);
       });
 
       // Members prompt has no buttons — nothing to disable on timeout; just leave it.

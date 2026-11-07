@@ -212,7 +212,7 @@ export async function execute(message: any, client: CassieClient): Promise<void>
           await reservedForDeveloper({ message }).catch((): null => null);
           return;
         }
-        if (mentionUserAlias && !(await enforceUserAliasPermissions(message, mentionCmd))) return;
+        if (mentionUserAlias && !(await enforceUserAliasPermissions(message, mentionCmd, isDeveloper))) return;
 
         if (client.db) {
           const disabled = await getDisabledCommandStatus(
@@ -231,6 +231,9 @@ export async function execute(message: any, client: CassieClient): Promise<void>
         }
 
         message.commandRawArgs = rest.slice(mentionCmdName.length).trimStart();
+        message.commandName = mentionCmdName;
+        message.commandUsage = mentionCmd.options?.usage;
+        message.commandPrefix = client.config.prefix;
 
         webhookLogger.logCommand(
           mentionCmdName,
@@ -347,7 +350,7 @@ export async function execute(message: any, client: CassieClient): Promise<void>
       return;
     }
   }
-  if (userAlias && !(await enforceUserAliasPermissions(message, command))) return;
+  if (userAlias && !(await enforceUserAliasPermissions(message, command, isDeveloper))) return;
 
   const subcommand = getPrefixSubcommand(args);
   const remainingCooldown = consumeCommandCooldown(client, command, message.author.id, subcommand);
@@ -367,6 +370,8 @@ export async function execute(message: any, client: CassieClient): Promise<void>
     : message.content.trim().slice(commandName.length);
   message.commandRawArgs = prefixAndCmd.trimStart();
   message.commandName = commandName;
+  message.commandUsage = command.options?.usage;
+  message.commandPrefix = usedPrefix || client.config.prefix;
 
   webhookLogger.logCommand(commandName, message.author, message.guild, args, {
     prefix: usedPrefix || '(noprefix)',
@@ -397,7 +402,8 @@ export async function execute(message: any, client: CassieClient): Promise<void>
  * still owns its own detailed checks; this gate enforces its declared
  * userPerms metadata for alias invocations.
  */
-async function enforceUserAliasPermissions(message: any, command: any): Promise<boolean> {
+async function enforceUserAliasPermissions(message: any, command: any, isDeveloper: boolean): Promise<boolean> {
+  if (isDeveloper) return true;
   const required: string[] = Array.isArray(command?.options?.userPerms)
     ? command.options.userPerms
     : [];

@@ -118,6 +118,7 @@ export const emojis = {
   pinkHeartsWithSparkles: '<:pinkHeartsWithSparkles:1543232959656624288>',
   lollipop: '<:lollipopShouldntBeSexualized:1565071061182054584>',
   redGlowPoint: '<:redGlowPoint:1567071923538497558>',
+  pixelatedWrong: '<:pixelatedWrong:1568460749678837871>',
 
   // Honeypot
   honeypot:       '🍯',

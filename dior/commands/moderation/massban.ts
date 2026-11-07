@@ -2,6 +2,7 @@ import { PermissionFlagsBits } from 'discord.js';
 import type { CassieClient } from '../../structures/CassieClient.js';
 import { sendError, sendSuccess } from '../../components/statusMessages.js';
 import { authorOnlyFilter } from '../../helpers/panelGuard.js';
+import { checkGuildCommandAccess } from '../../helpers/trustedAdministrators.js';
 import {
   buildActionConfirmPayload,
   buildActionTimedOutPayload,
@@ -12,10 +13,11 @@ import { parseUserInputs, resolveMembers } from '../../helpers/massModeration.js
 export const options = {
   name: 'massban',
   aliases: [] as string[],
-  description: 'Ban multiple members at once (max 50). Server owner only.',
+  description: 'Ban multiple members at once (max 50). Server owner or trusted administrator only.',
   usage: 'massban <user> <user> ...',
   category: 'moderation',
   owner: false,
+  trustedAdministrator: true,
   cooldown: 10,
 };
 
@@ -149,7 +151,8 @@ function buildDescription(members: any[], notFound: string[]): string {
     .map((member) => `• **${member.user.username}** (\`${member.id}\`)`)
     .join('\n');
   const preview = lines.length > 800 ? `${lines.slice(0, 800)}\n…` : lines;
-  let description = `Are you sure you want to ban these **${members.length}** member${members.length !== 1 ? 's' : ''}?\n${preview}`;
+  let description = `**Warning:** Bans remove these members from the server. They can only return if unbanned and able to rejoin.\n\n` +
+    `Are you sure you want to ban these **${members.length}** member${members.length !== 1 ? 's' : ''}?\n${preview}`;
   if (notFound.length > 0) {
     description += `\n\n-# **${notFound.length}** user${notFound.length !== 1 ? 's' : ''} not found, not in server, or skipped (will be ignored).`;
   }
@@ -164,12 +167,8 @@ export async function prefixExecute(
   const ctx = { message };
   const guild = message.guild;
   if (!guild) return sendError(ctx, 'This command can only be used in a server.');
-  if (message.author.id !== guild.ownerId) {
-    return sendError(ctx, 'Only the server owner can use this command.');
-  }
-  if (!message.channel.permissionsFor?.(message.member)?.has?.(PermissionFlagsBits.BanMembers)) {
-    return sendError(ctx, 'You need the **Ban Members** permission to use this command.');
-  }
+  const access = await checkGuildCommandAccess(options, guild, message.author.id, client);
+  if ('error' in access) return sendError(ctx, access.error);
   const botMember = await guild.members.fetchMe().catch((): null => null);
   if (!botMember?.permissions?.has?.(PermissionFlagsBits.BanMembers)) {
     return sendError(ctx, 'I need the **Ban Members** permission to ban members.');
@@ -188,9 +187,14 @@ export async function prefixExecute(
     return sendError(ctx, 'None of the provided users are eligible members of this server.');
   }
 
-  return confirmPrefix(message, buildDescription(members, notFound), () =>
-    runMassBan(ctx, guild, members, message.author.username),
-  );
+  return confirmPrefix(message, buildDescription(members, notFound), async () => {
+    const confirmedAccess = await checkGuildCommandAccess(options, guild, message.author.id, client);
+    if ('error' in confirmedAccess) {
+      await sendError(ctx, confirmedAccess.error);
+      return;
+    }
+    await runMassBan(ctx, guild, members, message.author.username);
+  });
 }
 
 export async function slashExecute(
@@ -201,12 +205,8 @@ export async function slashExecute(
   const ctx = { interaction };
   const guild = interaction.guild;
   if (!guild) return sendError(ctx, 'This command can only be used in a server.');
-  if (interaction.user.id !== guild.ownerId) {
-    return sendError(ctx, 'Only the server owner can use this command.');
-  }
-  if (!interaction.member?.permissions?.has?.(PermissionFlagsBits.BanMembers)) {
-    return sendError(ctx, 'You need the **Ban Members** permission to use this command.');
-  }
+  const access = await checkGuildCommandAccess(options, guild, interaction.user.id, client);
+  if ('error' in access) return sendError(ctx, access.error);
   const botMember = await guild.members.fetchMe().catch((): null => null);
   if (!botMember?.permissions?.has?.(PermissionFlagsBits.BanMembers)) {
     return sendError(ctx, 'I need the **Ban Members** permission to ban members.');
@@ -224,7 +224,12 @@ export async function slashExecute(
     return sendError(ctx, 'None of the provided users are eligible members of this server.');
   }
 
-  return confirmSlash(interaction, buildDescription(members, notFound), () =>
-    runMassBan({ channel: interaction.channel }, guild, members, interaction.user.username),
-  );
+  return confirmSlash(interaction, buildDescription(members, notFound), async () => {
+    const confirmedAccess = await checkGuildCommandAccess(options, guild, interaction.user.id, client);
+    if ('error' in confirmedAccess) {
+      await sendError({ channel: interaction.channel }, confirmedAccess.error);
+      return;
+    }
+    await runMassBan({ channel: interaction.channel }, guild, members, interaction.user.username);
+  });
 }

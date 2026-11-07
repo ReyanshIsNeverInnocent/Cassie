@@ -1,9 +1,8 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 
 export const data = new SlashCommandBuilder()
   .setName('massban')
-  .setDescription('Ban multiple members at once (max 50; server owner only).')
-  .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+  .setDescription('Ban multiple members at once (max 50; server owner or trusted administrator only).')
   .addStringOption((o) =>
     o.setName('users')
       .setDescription('Space-separated mentions, IDs, or usernames. Quote names containing spaces.')

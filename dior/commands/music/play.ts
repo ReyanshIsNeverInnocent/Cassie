@@ -11,6 +11,7 @@ import { unifiedSearch } from '../../helpers/sourceSearch.js';
 import { updateNowPlayingMessage } from '../../helpers/nowPlayingManager.js';
 import { addTracks } from '../../helpers/sessionQueue.js';
 import { join247Voice, releaseIdleVoiceForMusic } from '../../helpers/twentyFourSeven.js';
+import { getActiveNodeName } from '../../helpers/nodeManager.js';
 
 export const options = {
   name: 'play',
@@ -26,6 +27,11 @@ export const options = {
   sameVoiceChannel: false,
   cooldown: 3,
 };
+
+function getErrorField(error: unknown, field: string): unknown {
+  if (typeof error !== 'object' || error === null) return undefined;
+  return Reflect.get(error, field);
+}
 
 async function handle(
   ctx: { guild: any; user: any; voiceChannel: any; textChannelId: string; message?: any; interaction?: any; isSlash: boolean },
@@ -76,7 +82,25 @@ async function handle(
       deaf:    true,
       volume:  100,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const nodeName = getActiveNodeName() ?? 'unknown';
+    const errorDetails = {
+      name: getErrorField(err, 'name'),
+      message: getErrorField(err, 'message'),
+      status: getErrorField(err, 'status'),
+      error: getErrorField(err, 'error'),
+      path: getErrorField(err, 'path'),
+      trace: getErrorField(err, 'trace'),
+      stack: getErrorField(err, 'stack'),
+      value: err instanceof Error ? undefined : err,
+    };
+    console.error('[MUSIC] Kazagumo createPlayer failed.', {
+      guild: { id: guild.id, name: guild.name },
+      voiceChannel: { id: voiceChannel.id, name: voiceChannel.name },
+      nodeName,
+      error: errorDetails,
+    });
+
     const saved247 = await client.db?.get24Seven(guild.id).catch((): null => null);
     if (saved247?.enabled) {
       try {
@@ -85,7 +109,15 @@ async function handle(
         console.error(`[24-7] Could not restore voice after music connection failed in ${guild.name}: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`);
       }
     }
-    return sendError(errCtx, `Could not connect to your voice channel: ${err?.message ?? 'unknown error'}`);
+    const status = errorDetails.status;
+    const path = errorDetails.path;
+    const responseHint = typeof status === 'number'
+      ? ` (Lavalink HTTP ${status}${typeof path === 'string' ? ` at \`${path}\`` : ''})`
+      : '';
+    return sendError(
+      errCtx,
+      `Could not connect to your voice channel. Connection setup failed on Lavalink node **${nodeName}**${responseHint}. The failure details were logged.`,
+    );
   }
 
   player.textId = textChannelId;
@@ -135,7 +167,22 @@ async function handle(
   }
 
   if (!player.playing && !player.paused) {
-    await player.play().catch((): null => null);
+    try {
+      await player.play();
+    } catch (error: unknown) {
+      console.error('[MUSIC] Failed to start queued track.', {
+        guild: { id: guild.id, name: guild.name },
+        nodeName: player.shoukaku?.node?.name ?? 'unknown',
+        track: {
+          title: player.queue?.current?.title,
+          author: player.queue?.current?.author,
+          source: player.queue?.current?.sourceName,
+          uri: player.queue?.current?.uri,
+        },
+        error,
+      });
+      return sendError(errCtx, 'The track was added, but Lavalink failed to start playback. Check the bot console for details.');
+    }
   } else {
     // Player is already playing or paused — just refresh the now-playing panel
     // to show the updated queue without touching playback state.

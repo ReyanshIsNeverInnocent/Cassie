@@ -276,8 +276,17 @@ export async function validateJailTarget(opts: {
   botMember: any;
   developers: [string, string][];
   action: 'jail' | 'unjail';
+  ownerHierarchyOverride?: boolean;
 }): Promise<{ member: any } | { error: string }> {
-  const { guild, targetUser, invokerMember, botMember, developers, action } = opts;
+  const {
+    guild,
+    targetUser,
+    invokerMember,
+    botMember,
+    developers,
+    action,
+    ownerHierarchyOverride = false,
+  } = opts;
   const verb = action === 'jail' ? 'jail' : 'unjail';
 
   if (targetUser.id === invokerMember?.id) return { error: `You cannot ${verb} yourself.` };
@@ -290,7 +299,7 @@ export async function validateJailTarget(opts: {
   const member = await guild.members.fetch(targetUser.id).catch((): null => null);
   if (!member) return { error: `**${targetUser.username}** is not in this server.` };
 
-  const invokerIsOwner = invokerMember?.id === guild.ownerId;
+  const invokerIsOwner = invokerMember?.id === guild.ownerId || ownerHierarchyOverride;
   const invokerTop = invokerMember?.roles?.highest?.position ?? 0;
   const targetTop = member.roles?.highest?.position ?? 0;
   const botTop = botMember?.roles?.highest?.position ?? 0;

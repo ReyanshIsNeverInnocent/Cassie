@@ -70,7 +70,7 @@ export function buildMassNickTargetPanel(
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
         `## Mass Nickname — ${modeLabel(mode, word)}\n` +
-        `-# Choose who this should apply to.`,
+        `-# Choose who this should apply to. A warning and confirmation appear before any changes.`,
       ),
     )
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
@@ -174,7 +174,7 @@ export function buildMassNickMembersPromptPage(
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
         `## Mass Nickname — ${modeLabel(mode, word)}\n` +
-        `Type the members you want to apply this to in your next message, separated by spaces.\n` +
+        `Type the members you want to apply this to in your next message, separated by spaces. You can review and confirm before changes are made.\n` +
         `-# You can use mentions (\`@user\`), user IDs, or usernames. Up to 10 members. You have 60 seconds.`,
       ),
     );

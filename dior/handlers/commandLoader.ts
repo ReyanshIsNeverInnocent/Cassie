@@ -28,6 +28,10 @@ export interface CommandOptions {
   aliases?:    string[];
   /** Restrict to bot developers only. */
   owner?:      boolean;
+  /** Restrict command use to the actual Discord server owner. */
+  serverOwnerOnly?: boolean;
+  /** Allow the server owner and configured trusted administrators. */
+  trustedAdministrator?: boolean;
   userPerms?:  string[];
   botPerms?:   string[];
   /** Per-user cooldown in seconds, optionally overridden per subcommand. */

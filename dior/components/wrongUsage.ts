@@ -9,6 +9,7 @@ import {
   type ChatInputCommandInteraction,
 } from 'discord.js';
 import type { CassieClient } from '../structures/CassieClient.js';
+import { emojis } from '../emojis.js';
 
 interface WrongUsageContext {
   interaction?: ChatInputCommandInteraction;
@@ -21,25 +22,24 @@ export async function sendWrongUsage(
   context: WrongUsageContext,
   commandName: string,
   usage: string,
-  footer: string = '-# Use {prefix}help to see all commands.',
 ): Promise<Message | void> {
-  let resolvedFooter = footer;
-  if (context.client) {
-    resolvedFooter = footer.replace(/\{prefix\}/g, context.client.config.prefix);
-  }
+  const commandPrefix = context.client?.config.prefix
+    ?? (context.message as (Message & { commandPrefix?: string }) | undefined)?.commandPrefix
+    ?? config.prefix;
+  const footer = `-# Use "${commandPrefix}help ${commandName}" to view more info.`;
 
   const usageLines = usage.split('\n').map(l => l.trim()).filter(l => l);
   const bulletLines = usageLines.map(l => `- ${l}`).join('\n');
 
   const container = new ContainerBuilder().setAccentColor(parseInt(config.defaultAccentColor.replace('#', ''), 16))
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## Wrong usage`))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## Wrong usage ${emojis.pixelatedWrong}`))
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(`### Correct usage of \`${commandName}\` is:`),
       new TextDisplayBuilder().setContent(bulletLines),
     )
     .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(resolvedFooter));
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(footer));
 
   const payload = {
     components: [container],

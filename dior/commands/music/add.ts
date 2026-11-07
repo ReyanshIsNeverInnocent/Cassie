@@ -76,7 +76,25 @@ async function handle(
   }
 
   if (!player.playing && !player.paused) {
-    await player.play().catch((): null => null);
+    try {
+      await player.play();
+    } catch (error: unknown) {
+      console.error('[MUSIC] Failed to start queued track.', {
+        guild: { id: guild.id, name: guild.name },
+        nodeName: player.shoukaku?.node?.name ?? 'unknown',
+        track: {
+          title: player.queue?.current?.title,
+          author: player.queue?.current?.author,
+          source: player.queue?.current?.sourceName,
+          uri: player.queue?.current?.uri,
+        },
+        error,
+      });
+      return sendError(
+        isSlash ? { interaction } : { message, existingMessage: loadingMsg as any },
+        'The track was added, but Lavalink failed to start playback. Check the bot console for details.',
+      );
+    }
   } else {
     await updateNowPlayingMessage(client as any, player).catch((): null => null);
   }
